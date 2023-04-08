@@ -1,0 +1,17 @@
+BasedOnStyle: Google
+IndentWidth: 4
+---
+Language: Cpp
+
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Empty
+DerivePointerAlignment: false
+PointerAlignment: Left
+SortIncludes: false
+PackConstructorInitializers: Never
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: AfterComma
+AccessModifierOffset: -4
+ColumnLimit: 90
+BreakConstructorInitializers: BeforeComma

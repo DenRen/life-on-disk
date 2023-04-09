@@ -8,20 +8,27 @@
 #include <string.h>
 #include <cassert>
 #include <fstream>
+#include <tuple>
 
 #include "patricia_trie.h"
 
-std::pair<char*, size_t> CreateFilledExternalStrings() {
-    std::vector<std::string> strs = {"abaaaba", "abaaabb", "abac",    "bcbcaba",
+using std::cout;
+using std::endl;
+
+using namespace PT;
+
+std::tuple<char*, size_t, std::vector<ext_pos_t>> CreateFilledExternalStrings() {
+    std::vector<std::string> strs = {"abaaba",  "abaabb",  "abac",    "bcbcaba",
                                      "bcbcabb", "bcbcbba", "bcbcbbba"};
 
     uint ext_buf_len = strs.size();
     for (const auto& str : strs) ext_buf_len += str.size();
 
     char* const ext_buf_strs = new char[ext_buf_len];
-
+    std::vector<ext_pos_t> ext_poss;
     char* ptr = ext_buf_strs;
     for (const auto& str : strs) {
+        ext_poss.push_back(ptr - ext_buf_strs);
         ptr = std::copy(begin(str), end(str), ptr);
         *ptr++ = '\0';
     }
@@ -31,48 +38,23 @@ std::pair<char*, size_t> CreateFilledExternalStrings() {
     // }
     // putchar('\n');
 
-    return {ext_buf_strs, ext_buf_len};
+    return {ext_buf_strs, ext_buf_len, ext_poss};
 }
 
-using std::cout;
-using std::endl;
-
-using namespace PT;
-
 int main() {
-    // const auto [ext_buf_strs, ext_buf_len] = CreateFilledExternalStrings();
-    // delete[] ext_buf_strs;
+    const auto [ext_buf_strs, ext_buf_len, ext_poss] = CreateFilledExternalStrings();
 
     PatriciaTrie pt;
-    InnerNodeWrapper root{pt.GetRoot()};
+    for (int i = 0; i < ext_poss.size(); ++i) {
+        const auto pos = ext_poss[i];
+        const char_t* str = ext_buf_strs + pos;
+        pt.Insert(ext_buf_strs, pos, strlen(str) + 1);
 
-    pt.InsertUniqExt(root, 'a', ExternalNode{30, 170});
-    pt.InsertUniqExt(root, 'c', ExternalNode{30, 190});
-    pt.InsertUniqExt(root, 'H', ExternalNode{30, 190});
-    pt.InsertUniqExt(root, 'e', ExternalNode{30, 100});
-    pt.InsertUniqExt(root, 'l', ExternalNode{30, 102});
-    pt.InsertUniqExt(root, 'o', ExternalNode{30, 107});
-    pt.InsertUniqExt(root, 'w', ExternalNode{30, 100});
-    pt.InsertUniqExt(root, 'r', ExternalNode{30, 100});
-
-    {
-        InnerNode& inn_node = pt.InsertUniqInnExt(root, 'l', 30, '_', ExternalNode{30, 185});
-        InnerNodeWrapper node{inn_node};
-        pt.InsertUniqExt(node, 'b', ExternalNode{30, 199});
-        pt.InsertUniqInnExt(node, 'b', 30, 'U', ExternalNode{30, 24});
-    }
-
-    pt.InsertUniqExt(root, 'd', ExternalNode{30, 100});
-    pt.InsertUniqExt(root, 'b', ExternalNode{30, 102});
-    pt.InsertUniqExt(root, 'A', ExternalNode{30, 170});
-
-    {
-        InnerNode& inn_node = pt.InsertUniqInnExt(root, 'e', 30, 'Y', ExternalNode{30, 15});
-        InnerNodeWrapper node{inn_node};
-        pt.InsertUniqExt(node, 'b', ExternalNode{30, 1909});
-        pt.InsertUniqInnExt(node, 'b', 30, 'U', ExternalNode{30, 240});
+        cout << i << ") " << str << ": " << pos << endl;
     }
 
     std::ofstream dot_file{"dump.dot"};
-    dot_file << pt.DrawTrie();
+    dot_file << pt.DrawTrie(ext_buf_strs);
+
+    delete[] ext_buf_strs;
 }

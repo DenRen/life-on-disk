@@ -18,7 +18,7 @@ using u8 = uint8_t;
 using char_t = char;
 using alph_size_t = u8;
 using len_t = uint32_t;
-using blk_pos_t = uint32_t;
+using ext_pos_t = uint64_t;
 using uint = unsigned;
 
 using node_pos_t = uint16_t;
@@ -51,18 +51,26 @@ PACKED_STRUCT Branch {
 };
 
 PACKED_STRUCT ExternalNode : public Node {  // Leaf node of PT
-    ExternalNode(len_t len, blk_pos_t pos_ext) noexcept
+    ExternalNode(len_t len, ext_pos_t pos_ext) noexcept
         : Node{len, Node::Type::External}
         , pos_ext{pos_ext} {}
 
-    blk_pos_t pos_ext;
+    ext_pos_t pos_ext;
 };
 
 class InnerNodeWrapper {
 public:
+    InnerNodeWrapper(InnerNode& node) noexcept
+        : m_node{node} {}
+
     InnerNodeWrapper(Node& node) noexcept
         : m_node{static_cast<InnerNode&>(node)} {
-        assert(node.IsInnerNode());
+        assert(m_node.IsInnerNode());
+    }
+
+    InnerNodeWrapper(Node* node) noexcept
+        : m_node{static_cast<InnerNode&>(*node)} {
+        assert(m_node.IsInnerNode());
     }
 
     Branch* UppperBound(char symb) noexcept {
@@ -95,6 +103,9 @@ public:
     const InnerNode& Base() const noexcept {
         return m_node;
     }
+    InnerNode& Base() noexcept {
+        return m_node;
+    }
 
     uint GetFullSize() const noexcept {
         return (u8*)cend() - (u8*)&m_node;
@@ -125,6 +136,18 @@ public:
                 branch->node_pos += add_shift_size;
             }
         }
+    }
+
+    Node& GetChild(const Branch* branch) noexcept {
+        return *(Node*)((u8*)&m_node + branch->node_pos);
+    }
+
+    const Node& GetChild(const Branch* branch) const noexcept {
+        return *(const Node*)((const u8*)&m_node + branch->node_pos);
+    }
+
+    Node& GetChild(uint index) noexcept {
+        return GetChild(GetBranches() + index);
     }
 
     void Dump() const;
@@ -170,16 +193,77 @@ public:
         m_root.size = 0;
     }
 
-    std::string DrawTrie() const;
+    void Insert(const char_t* ext_begin, ext_pos_t str_pos, len_t len) {
+        assert(ext_begin != nullptr);
+
+        const char_t* str = ext_begin + str_pos;
+
+        InnerNodeWrapper root{m_root};
+        Branch* insert_pos = root.LowerBound(str[0]);
+        if (insert_pos == root.end()) {
+            ExternalNode ext_node{len, str_pos};
+            InsertUniqExt(root, insert_pos, str[0], ext_node);
+        } else {
+            Node& child = root.GetChild(insert_pos);
+            InsertInNonRoot(child, m_root, insert_pos, ext_begin, len, str_pos, 1);
+        }
+    }
+
+    std::string DrawTrie(const char_t* ext_begin) const;
 
 private:
-    void DrawTrieImpl(const Node& node, std::string& init_nodes, std::string& conns) const;
+    void DrawTrieImpl(const char_t* ext_begin, const Node& node, std::string& init_nodes,
+                      std::string& conns) const;
+
+    static ExternalNode* FindLeftmostNode(Node& node) noexcept {
+        Node* leftmost_child = &node;
+        while (!leftmost_child->IsLeafNode()) {
+            leftmost_child = &InnerNodeWrapper{leftmost_child}.GetChild(0u);
+        }
+        return (ExternalNode*)leftmost_child;
+    }
+
+    void InsertInNonRoot(Node& child, InnerNode& parent, Branch* insert_pos,
+                         const char_t* ext_begin, len_t len, ext_pos_t str_pos,
+                         len_t lcp) noexcept {
+        // Get child sstring for compare min_len characters
+        ExternalNode* leftmost_child = FindLeftmostNode(child);
+        const char_t* leftmost_node_str = ext_begin + leftmost_child->pos_ext;
+
+        const char_t* str = ext_begin + str_pos;
+        len_t min_len = std::min(len, child.len);
+        len_t i = lcp;
+        for (; i < min_len; ++i) {
+            if (str[i] != leftmost_node_str[i]) {
+                break;
+            }
+        }
+
+        if (i != min_len) {
+            // Insert new inner node between parent and child
+            char_t symb_child = leftmost_node_str[i];
+            char_t symb_new_ext = str[i];
+            ExternalNode ext_node{len, str_pos};
+            InnerNodeWrapper wrapper{parent};
+            InsertUniqInnExt(wrapper, insert_pos, i, symb_new_ext, symb_child, ext_node);
+        } else {
+            InnerNodeWrapper node{child};
+            Branch* insert_pos = node.LowerBound(str[i]);
+            if (insert_pos == node.end()) {
+                ExternalNode ext_node{len, str_pos};
+                InsertUniqExt(node, insert_pos, str[i], ext_node);
+            } else {
+                Node& new_child = node.GetChild(insert_pos);
+                InnerNode& new_parent = node.Base();
+                InsertInNonRoot(new_child, new_parent, insert_pos, ext_begin, len, str_pos, i);
+            }
+        }
+    }
 
 public:  // Temporary
          // private:
-    void InsertUniqExt(InnerNodeWrapper& node, char_t symb, const ExternalNode& ext_node) noexcept {
-        Branch* insert_pos = node.LowerBound(symb);
-
+    void InsertUniqExt(InnerNodeWrapper node, Branch* const insert_pos /* LowerBound */,
+                       char_t symb, const ExternalNode& ext_node) noexcept {
         const uint insert_size = sizeof(Branch) + sizeof(ExternalNode);
         u8* src = (u8*)node.end();
         memmove(src + insert_size, src, m_size - (src - (u8*)this));
@@ -195,9 +279,10 @@ public:  // Temporary
         ShiftNodes(insert_node_base, src, insert_size);
     }
 
-    InnerNode& InsertUniqInnExt(InnerNodeWrapper& node, char_t symb, len_t inn_node_len,
-                                char_t ext_symb, const ExternalNode& ext_node) noexcept {
-        Branch* const insert_pos = node.LowerBound(symb);
+    InnerNode& InsertUniqInnExt(InnerNodeWrapper& node, Branch* const insert_pos /* LowerBound */,
+                                len_t inn_node_len, char_t symb_new_child, char_t symb_old_child,
+                                const ExternalNode& ext_node) noexcept {
+        char_t symb = insert_pos->symb;
         assert(insert_pos != node.end() && insert_pos->symb == symb);
 
         const uint insert_size = 2 * sizeof(Branch) + sizeof(InnerNode) + sizeof(ExternalNode);
@@ -218,12 +303,12 @@ public:  // Temporary
         u8* shifted_child = node_base + insert_pos->node_pos + insert_size;
         node_pos_t pos_shifted_child = (node_pos_t)(shifted_child - (u8*)&inn_node);
         node_pos_t pos_new_child = (u8*)new_ext_node - (u8*)&inn_node;
-        if (ext_symb > symb) {
-            new_branches[0] = Branch{.symb = symb, .node_pos = pos_shifted_child};
-            new_branches[1] = Branch{.symb = ext_symb, .node_pos = pos_new_child};
+        if (symb_new_child < symb_old_child) {
+            new_branches[0] = Branch{.symb = symb_new_child, .node_pos = pos_new_child};
+            new_branches[1] = Branch{.symb = symb_old_child, .node_pos = pos_shifted_child};
         } else {
-            new_branches[1] = Branch{.symb = symb, .node_pos = pos_shifted_child};
-            new_branches[0] = Branch{.symb = ext_symb, .node_pos = pos_new_child};
+            new_branches[1] = Branch{.symb = symb_new_child, .node_pos = pos_new_child};
+            new_branches[0] = Branch{.symb = symb_old_child, .node_pos = pos_shifted_child};
         }
 
         {

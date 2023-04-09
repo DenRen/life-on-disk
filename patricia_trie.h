@@ -13,8 +13,10 @@
 
 namespace PT {
 
+using u8 = uint8_t;
+
 using char_t = char;
-using alph_size_t = uint8_t;
+using alph_size_t = u8;
 using len_t = uint32_t;
 using blk_pos_t = uint32_t;
 using uint = unsigned;
@@ -22,7 +24,7 @@ using uint = unsigned;
 using node_pos_t = uint16_t;
 
 PACKED_STRUCT Node {
-    enum class Type : uint8_t { Inner, External };
+    enum class Type : u8 { Inner, External };
 
     len_t len;
     Type type;
@@ -36,6 +38,10 @@ PACKED_STRUCT Node {
 };
 
 PACKED_STRUCT InnerNode : public Node {
+    InnerNode(len_t len = 0, alph_size_t size = 0) noexcept
+        : Node{len, Type::Inner}
+        , size(size) {}
+
     alph_size_t size;
 };
 
@@ -91,24 +97,25 @@ public:
     }
 
     uint GetFullSize() const noexcept {
-        return (uint8_t*)cend() - (uint8_t*)&m_node;
+        return (u8*)cend() - (u8*)&m_node;
     }
 
-    void InsertUniq(char_t symb, Node* child, Branch* insert_pos,
+    void InsertUniq(Branch* insert_pos, char_t symb, Node* child,
                     node_pos_t add_shift_size) noexcept {
         // Check on unique insertion
         assert((insert_pos - GetBranches()) > 0 ? (insert_pos - 1)->symb != symb : true);
 
-        uint shift_size = (end() - insert_pos) * sizeof(Branch);
+        Branch* const cur_end = end();
+        uint shift_size = (cur_end - insert_pos) * sizeof(Branch);
         memmove(insert_pos + 1, insert_pos, shift_size);
 
         insert_pos->symb = symb;
-        insert_pos->node_pos = (uint8_t*)child - (uint8_t*)&m_node;
+        insert_pos->node_pos = (u8*)child - (u8*)&m_node;
 
-        const uint bound_pos = (uint8_t*)end() - (uint8_t*)&m_node;
+        const uint bound_pos = (u8*)cur_end - (u8*)&m_node;
         ++m_node.size;
 
-        Branch* last_end = end();
+        Branch* const last_end = end();
         for (Branch* branch = begin(); branch < last_end; ++branch) {
             if (branch == insert_pos) {
                 continue;
@@ -124,10 +131,10 @@ public:
 
 private:
     const Branch* GetBranchs() const noexcept {
-        return (const Branch*)((const uint8_t*)&m_node + sizeof(m_node));
+        return (const Branch*)((const u8*)&m_node + sizeof(m_node));
     }
     Branch* GetBranches() noexcept {
-        return (Branch*)((uint8_t*)&m_node + sizeof(m_node));
+        return (Branch*)((u8*)&m_node + sizeof(m_node));
     }
 
 private:
@@ -156,7 +163,7 @@ public:
     constexpr static uint max_num_leafs = FindMaxNumLeafs(block_size);
 
     PatriciaTrie() noexcept {
-        m_size = (uint8_t*)(&m_root + 1) - (uint8_t*)this;
+        m_size = (u8*)(&m_root + 1) - (u8*)this;
 
         m_root.len = 0;
         m_root.type = Node::Type::Inner;
@@ -170,24 +177,22 @@ public:
     std::string DrawTrie() const;
 
 private:
-    void DrawTrieImpl(const Node& node, std::string& init_nodes,
-                      std::string& conns) const;
+    void DrawTrieImpl(const Node& node, std::string& init_nodes, std::string& conns) const;
 
 public:  // Temporary
          // private:
-    void InsertUniqExt(InnerNodeWrapper& node, char_t symb,
-                       const ExternalNode& ext_node) noexcept {
+    void InsertUniqExt(InnerNodeWrapper& node, char_t symb, const ExternalNode& ext_node) noexcept {
         Branch* insert_pos = node.LowerBound(symb);
 
         const uint insert_size = sizeof(Branch) + sizeof(ExternalNode);
-        uint8_t* src = (uint8_t*)node.end();
-        memmove(src + insert_size, src, m_size - (src - (uint8_t*)this));
+        u8* src = (u8*)node.end();
+        memmove(src + insert_size, src, m_size - (src - (u8*)this));
         m_size += insert_size;
 
         ExternalNode* new_ext_node = (ExternalNode*)(src + sizeof(Branch));
         *new_ext_node = ext_node;
 
-        node.InsertUniq(symb, (Node*)new_ext_node, insert_pos, insert_size);
+        node.InsertUniq(insert_pos, symb, (Node*)new_ext_node, insert_size);
 
         Node* insert_node_base = (Node*)&node.Base();
         Node* cur_base_node = &m_root;
@@ -195,19 +200,83 @@ public:  // Temporary
             if (cur_base_node->IsInnerNode()) {
                 InnerNodeWrapper inn_node{*(InnerNode*)cur_base_node};
 
-                node_pos_t node_pos_shifted =
-                    (uint8_t*)new_ext_node - (uint8_t*)cur_base_node;
+                node_pos_t node_pos_shifted = (u8*)src - (u8*)cur_base_node;
                 for (auto& branch : inn_node) {
                     if (branch.node_pos >= node_pos_shifted) {
                         branch.node_pos += insert_size;
                     }
                 }
 
-                cur_base_node = (Node*)((uint8_t*)cur_base_node + inn_node.GetFullSize());
+                cur_base_node = (Node*)((u8*)cur_base_node + inn_node.GetFullSize());
             } else {
-                cur_base_node = (Node*)((uint8_t*)cur_base_node + sizeof(ExternalNode));
+                cur_base_node = (Node*)((u8*)cur_base_node + sizeof(ExternalNode));
             }
         }
+    }
+
+    InnerNode& InsertUniqInnExt(InnerNodeWrapper& node, char_t symb, len_t inn_node_len,
+                                char_t ext_symb, const ExternalNode& ext_node) noexcept {
+        Branch* const insert_pos = node.LowerBound(symb);
+        assert(insert_pos != node.end() && insert_pos->symb == symb);
+
+        const uint insert_size = 2 * sizeof(Branch) + sizeof(InnerNode) + sizeof(ExternalNode);
+        u8* src = (u8*)node.end();
+        memmove(src + insert_size, src, m_size - (src - (u8*)this));
+        m_size += insert_size;
+
+        InnerNode& inn_node = *(InnerNode*)src;
+        inn_node = {inn_node_len, 2};
+
+        Branch* new_branches = (Branch*)(&inn_node + 1);
+
+        ExternalNode* new_ext_node = (ExternalNode*)(new_branches + 2);
+        *new_ext_node = ext_node;
+
+        u8* node_base = (u8*)&node.Base();
+        u8* shifted_child = node_base + insert_pos->node_pos + insert_size;
+        node_pos_t pos_shifted_child = (node_pos_t)(shifted_child - (u8*)&inn_node);
+        node_pos_t pos_new_child = (u8*)new_ext_node - (u8*)&inn_node;
+        if (ext_symb > symb) {
+            new_branches[0] = Branch{.symb = symb, .node_pos = pos_shifted_child};
+            new_branches[1] = Branch{.symb = ext_symb, .node_pos = pos_new_child};
+        } else {
+            new_branches[1] = Branch{.symb = symb, .node_pos = pos_shifted_child};
+            new_branches[0] = Branch{.symb = ext_symb, .node_pos = pos_new_child};
+        }
+
+        {
+            node_pos_t node_pos_shifted = (src - (u8*)&node.Base());
+            for (auto& branch : node) {
+                if (&branch == insert_pos) {
+                    insert_pos->node_pos = (u8*)&inn_node - (u8*)&node.Base();
+                } else {
+                    if (branch.node_pos >= node_pos_shifted) {
+                        branch.node_pos += insert_size;
+                    }
+                }
+            }
+        }
+
+        Node* insert_node_base = (Node*)&node.Base();
+        Node* cur_base_node = &m_root;
+        while (cur_base_node != insert_node_base) {
+            if (cur_base_node->IsInnerNode()) {
+                InnerNodeWrapper inn_node{*(InnerNode*)cur_base_node};
+
+                node_pos_t node_pos_shifted = (u8*)src - (u8*)cur_base_node;
+                for (auto& branch : inn_node) {
+                    if (branch.node_pos >= node_pos_shifted) {
+                        branch.node_pos += insert_size;
+                    }
+                }
+
+                cur_base_node = (Node*)((u8*)cur_base_node + inn_node.GetFullSize());
+            } else {
+                cur_base_node = (Node*)((u8*)cur_base_node + sizeof(ExternalNode));
+            }
+        }
+
+        return inn_node;
     }
 
     InnerNode& GetRoot() {

@@ -51,7 +51,7 @@ void PatriciaTrie::DrawTrieImpl(const Node& node, std::string& init_nodes,
             }
             is_first = false;
 
-            const auto symb = std::to_string(branch.symb);
+            std::string symb{branch.symb};
             init_nodes += "<" + symb + "> " + symb;
 
             const uint8_t* child = (const uint8_t*)&node + branch.node_pos;

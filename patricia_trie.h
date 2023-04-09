@@ -94,7 +94,8 @@ public:
         return (uint8_t*)cend() - (uint8_t*)&m_node;
     }
 
-    void InsertUniq(char_t symb, Node* child, Branch* insert_pos) noexcept {
+    void InsertUniq(char_t symb, Node* child, Branch* insert_pos,
+                    node_pos_t add_shift_size) noexcept {
         // Check on unique insertion
         assert((insert_pos - GetBranches()) > 0 ? (insert_pos - 1)->symb != symb : true);
 
@@ -104,11 +105,17 @@ public:
         insert_pos->symb = symb;
         insert_pos->node_pos = (uint8_t*)child - (uint8_t*)&m_node;
 
-        const uint old_num_branch = m_node.size++;
-        Branch* branches = GetBranches();
-        for (uint i = 0; i < old_num_branch; ++i) {
-            if (branches[i].node_pos >= insert_pos->node_pos) {
-                branches[i].node_pos += sizeof(Branch);
+        const uint bound_pos = (uint8_t*)end() - (uint8_t*)&m_node;
+        ++m_node.size;
+
+        Branch* last_end = end();
+        for (Branch* branch = begin(); branch < last_end; ++branch) {
+            if (branch == insert_pos) {
+                continue;
+            }
+
+            if (branch->node_pos >= bound_pos) {
+                branch->node_pos += add_shift_size;
             }
         }
     }
@@ -171,16 +178,16 @@ public:  // Temporary
     void InsertUniqExt(InnerNodeWrapper& node, char_t symb,
                        const ExternalNode& ext_node) noexcept {
         Branch* insert_pos = node.LowerBound(symb);
-        assert(insert_pos == node.end());
 
         const uint insert_size = sizeof(Branch) + sizeof(ExternalNode);
         uint8_t* src = (uint8_t*)node.end();
         memmove(src + insert_size, src, m_size - (src - (uint8_t*)this));
+        m_size += insert_size;
 
         ExternalNode* new_ext_node = (ExternalNode*)(src + sizeof(Branch));
         *new_ext_node = ext_node;
 
-        node.InsertUniq(symb, (Node*)new_ext_node, insert_pos);
+        node.InsertUniq(symb, (Node*)new_ext_node, insert_pos, insert_size);
 
         Node* insert_node_base = (Node*)&node.Base();
         Node* cur_base_node = &m_root;

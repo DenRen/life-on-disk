@@ -67,7 +67,7 @@ int main() {
     pt.InsertUniqExt(root, 'A', ExternalNode{30, 170});
 
     {
-        InnerNode& inn_node = pt.InsertUniqInnExt(root, 'e', 30, 'P', ExternalNode{30, 15});
+        InnerNode& inn_node = pt.InsertUniqInnExt(root, 'e', 30, 'Y', ExternalNode{30, 15});
         InnerNodeWrapper node{inn_node};
         pt.InsertUniqExt(node, 'b', ExternalNode{30, 1909});
         pt.InsertUniqInnExt(node, 'b', 30, 'U', ExternalNode{30, 240});

@@ -170,10 +170,6 @@ public:
         m_root.size = 0;
     }
 
-    void Insert(const char* str, uint64_t pos) {
-        // TODO
-    }
-
     std::string DrawTrie() const;
 
 private:
@@ -188,6 +184,7 @@ public:  // Temporary
         u8* src = (u8*)node.end();
         memmove(src + insert_size, src, m_size - (src - (u8*)this));
         m_size += insert_size;
+        assert(m_size < block_size);
 
         ExternalNode* new_ext_node = (ExternalNode*)(src + sizeof(Branch));
         *new_ext_node = ext_node;
@@ -195,23 +192,7 @@ public:  // Temporary
         node.InsertUniq(insert_pos, symb, (Node*)new_ext_node, insert_size);
 
         Node* insert_node_base = (Node*)&node.Base();
-        Node* cur_base_node = &m_root;
-        while (cur_base_node != insert_node_base) {
-            if (cur_base_node->IsInnerNode()) {
-                InnerNodeWrapper inn_node{*(InnerNode*)cur_base_node};
-
-                node_pos_t node_pos_shifted = (u8*)src - (u8*)cur_base_node;
-                for (auto& branch : inn_node) {
-                    if (branch.node_pos >= node_pos_shifted) {
-                        branch.node_pos += insert_size;
-                    }
-                }
-
-                cur_base_node = (Node*)((u8*)cur_base_node + inn_node.GetFullSize());
-            } else {
-                cur_base_node = (Node*)((u8*)cur_base_node + sizeof(ExternalNode));
-            }
-        }
+        ShiftNodes(insert_node_base, src, insert_size);
     }
 
     InnerNode& InsertUniqInnExt(InnerNodeWrapper& node, char_t symb, len_t inn_node_len,
@@ -223,6 +204,7 @@ public:  // Temporary
         u8* src = (u8*)node.end();
         memmove(src + insert_size, src, m_size - (src - (u8*)this));
         m_size += insert_size;
+        assert(m_size < block_size);
 
         InnerNode& inn_node = *(InnerNode*)src;
         inn_node = {inn_node_len, 2};
@@ -258,15 +240,22 @@ public:  // Temporary
         }
 
         Node* insert_node_base = (Node*)&node.Base();
+        ShiftNodes(insert_node_base, src, insert_size);
+
+        return inn_node;
+    }
+
+    void ShiftNodes(Node* end, u8* src_changes, node_pos_t shift_size) noexcept {
+        Node* insert_node_base = end;
         Node* cur_base_node = &m_root;
         while (cur_base_node != insert_node_base) {
             if (cur_base_node->IsInnerNode()) {
                 InnerNodeWrapper inn_node{*(InnerNode*)cur_base_node};
 
-                node_pos_t node_pos_shifted = (u8*)src - (u8*)cur_base_node;
+                node_pos_t node_pos_shifted = src_changes - (u8*)cur_base_node;
                 for (auto& branch : inn_node) {
                     if (branch.node_pos >= node_pos_shifted) {
-                        branch.node_pos += insert_size;
+                        branch.node_pos += shift_size;
                     }
                 }
 
@@ -275,8 +264,6 @@ public:  // Temporary
                 cur_base_node = (Node*)((u8*)cur_base_node + sizeof(ExternalNode));
             }
         }
-
-        return inn_node;
     }
 
     InnerNode& GetRoot() {

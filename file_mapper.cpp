@@ -14,7 +14,7 @@ FileMapper::FileMapper(std::string_view path) {
         close(fd);
         std::runtime_error("Failed to get file size");
     }
-    m_size = data_len;
+    m_size = data_len + 1;  // For zero terminated
 
     m_data = (const char*)mmap(NULL, m_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
@@ -30,7 +30,7 @@ FileMapper::~FileMapper() {
 std::vector<uint64_t> BuildSortedSuff(std::string_view str) {
     std::vector<uint64_t> suff;
     suff.resize(str.size());
-    for (uint64_t pos = 0; pos < str.size(); ++pos) {
+    for (uint64_t pos = 0; pos < suff.size(); ++pos) {
         suff[pos] = pos;
     }
 

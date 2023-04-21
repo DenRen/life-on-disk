@@ -75,7 +75,7 @@ private:
 void PatriciaTrieNaive::DestructInnerNode(InnerNode* node) noexcept {
     for (auto [branch_symb, child] : node->childs) {
         if (child->IsLeaf()) {
-            delete child;
+            delete (LeafNode*)child;
         } else {
             DestructInnerNode((InnerNode*)child);
         }
@@ -246,7 +246,7 @@ u8* PatriciaTrieNaive::EmplaceInnerNode(u8* dest, in_blk_pos_t& dest_size, u8* d
     auto* branch_end = branch + node_src->childs.size();
 
     const in_blk_pos_t emplace_size = (u8*)branch_end - dest;
-    std::cout << "size: " << emplace_size << std::endl;
+    // std::cout << "size: " << emplace_size << std::endl;
     if (emplace_size > dest_size) {
         throw std::runtime_error("Destinantion is empty!");
     }
@@ -276,16 +276,17 @@ u8* PatriciaTrieNaive::EmplaceInnerNode(u8* dest, in_blk_pos_t& dest_size, u8* d
 
 }  // namespace detail
 
-void BuildAmdEmplacePT(const std::vector<std::pair<std::string_view, in_blk_pos_t>>& strs, u8* dest,
+void BuildAndEmplacePT(const std::vector<std::pair<std::string_view, in_blk_pos_t>>& strs, u8* dest,
                        size_t size) {
     // Build PT in-memory and convert one to on-disk format
     detail::PatriciaTrieNaive pt;
     for (auto [str, ext_node_pos] : strs) {
         pt.Insert(str, ext_node_pos);
-        std::cout << "ins: \"" << str << "\"\n";
+        // std::cout << "ins: \"" << str << "\"\n";
     }
 
-    std::ofstream{"Native.dot"} << pt.DrawTrie();
+    static int ctr = 0;
+    std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
 
     pt.EmplaceOn(dest, size);
 }

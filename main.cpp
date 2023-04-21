@@ -34,7 +34,7 @@ int main() try {
     // std::cout << sizeof(SBT::InnerNode) << std::endl;
     // std::cout << sizeof(SBT::LeafNode) << std::endl;
 
-#if 0
+#if 1
     const std::string_view data_path = "../../data/Homo_sapiens.GRCh38.dna.chromosome.MT.fa";
 #else
     const std::string_view data_path = "../../data/micro";
@@ -54,11 +54,11 @@ int main() try {
     // u8* page = new u8[SBT::g_page_size]{};
 
     // std::cout << SBT::Node<true>::num_leaves << std::endl;
-    // PT::BuildAmdEmplacePT(data, page, SBT::g_page_size);
+    // PT::BuildAndEmplacePT(data, page, SBT::g_page_size);
 
     // delete[] page;
 
-    SBT::StringBTree::Build("btree.bin", std::string{data_path}, suff);
+    auto sbt = SBT::StringBTree::Build("btree.bin", std::string{data_path}, suff);
 } catch (std::exception& exc) {
     std::cerr << "Exception: " << exc.what() << std::endl;
 }

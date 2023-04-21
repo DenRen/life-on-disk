@@ -38,7 +38,7 @@ constexpr uint CalcMaxSize(uint num_leafs) noexcept {
     return num_inner_nodes * (sizeof(InnerNode) + branch_per_node * sizeof(Branch));
 }
 
-void BuildAmdEmplacePT(const std::vector<std::pair<std::string_view, in_blk_pos_t>>& strs, u8* dest,
+void BuildAndEmplacePT(const std::vector<std::pair<std::string_view, in_blk_pos_t>>& strs, u8* dest,
                        size_t size);
 
 }  // namespace PT

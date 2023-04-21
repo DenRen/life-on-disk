@@ -75,11 +75,10 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
         for (str_len_t i_str = i_str_begin; i_str < i_str_end; ++i_str) {
             str_pos_t i = i_str - i_str_begin;
             ext_poss[i].str_pos = (str_pos_t)suff_arr[i_str];
-            strs[i_str] = {text.substr(ext_poss[i].str_pos),
-                           (u8*)&ext_poss[i].str_pos - addr_begin};
+            strs[i] = {text.substr(ext_poss[i].str_pos), (u8*)&ext_poss[i].str_pos - addr_begin};
         }
 
-        PT::BuildAmdEmplacePT(strs, addr_begin, sizeof(node->PT));
+        PT::BuildAndEmplacePT(strs, addr_begin, sizeof(node->PT));
 
         if (num_leaf_node > 1) {
             exts[i_node_leaf] = {ext_poss[0].str_pos, ext_poss[node_num_str - 1].str_pos,
@@ -121,7 +120,7 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
                                          (u8*)&ext_pos.right_str_pos - addr_begin};
             }
 
-            PT::BuildAmdEmplacePT(strs, addr_begin, sizeof(node->PT));
+            PT::BuildAndEmplacePT(strs, addr_begin, sizeof(node->PT));
 
             if (layer_num_node > 1) {  // Is not root
                 exts[i_node] = {ext_poss[0].left_str_pos, ext_poss[num_child - 1].right_str_pos,

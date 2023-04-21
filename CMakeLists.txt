@@ -4,7 +4,7 @@ project(main VERSION 0.1.0)
 # include(CTest)
 # enable_testing()
 
-file(GLOB sources *.cpp *.h string_btree/*.cpp string_btree/*.h)
+file(GLOB sources main.cpp src/*.cpp src/*.h)
 add_executable(main ${sources})
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

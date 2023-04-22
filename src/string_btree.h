@@ -39,22 +39,25 @@ constexpr uint CalcPTNumLeaf(int pt_ext_size) noexcept {
 }
 
 PACKED_STRUCT NodeBase {
-    enum class NodeType : u8 { Inner, Leaf };
-
-    NodeType type;
+    enum class Type : u8 { Inner, Leaf };
+    Type type;
 };
 
 template <bool IsLeaf>
-PACKED_STRUCT Node {
-    enum class Type : u8 { Inner, Leaf };
-    Type type = IsLeaf ? Type::Leaf : Type::Inner;
+PACKED_STRUCT Node : public NodeBase {
+    Node() noexcept
+        : NodeBase{IsLeaf ? Type::Leaf : Type::Inner} {}
 
-    constexpr static uint num_leaves = CalcPTNumLeaf<IsLeaf>(g_block_size - sizeof(type));
+    constexpr static uint num_leaves = CalcPTNumLeaf<IsLeaf>(g_block_size - sizeof(NodeBase));
     std::array<uint8_t, NodeSectionsSize<IsLeaf, num_leaves>::PT> PT;
     std::array<uint8_t, NodeSectionsSize<IsLeaf, num_leaves>::Ext> Ext;
 
     ExtItem<IsLeaf>* ExtBegin() noexcept {
         return (ExtItem<IsLeaf>*)&Ext;
+    }
+
+    in_blk_pos_t GetExtPosBegin() const noexcept {
+        return (const u8*)&Ext - (const u8*)&PT;
     }
 }
 __attribute__((aligned(g_block_size)));
@@ -72,6 +75,11 @@ public:
 
     static StringBTree Build(std::string sbt_dest_path, std::string path_text,
                              const std::vector<str_len_t>& suff_arr);
+
+    void Dump();
+
+private:
+    void DumpImpl(const NodeBase* node_base, int depth);
 
 private:
     FileMapperRead btree;

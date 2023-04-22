@@ -86,7 +86,7 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
         }
     }
 
-    if (num_leaf_node <= LeafNode::num_leaves) {
+    if (num_leaf_node == 1) {
         return {sbt_dest_path, path_text};
     }
 
@@ -156,6 +156,69 @@ StringBTree::StringBTree(std::string path_sbt, std::string path_text)
     } else {
         throw std::runtime_error{"Size of btree too small"};
     }
+}
+
+static void print_shift(int depth) {
+    for (int i = 0; i < depth; i++) {
+        std::cout << "  ";
+    }
+}
+
+static void print_node_type(const NodeBase* node_base) {
+    if (node_base->type == NodeBase::Type::Leaf) {
+        std::cout << "leaf\n";
+    } else if (node_base->type == NodeBase::Type::Inner) {
+        std::cout << "inner\n";
+    } else {
+        throw std::runtime_error{"Incorrect node type"};
+    }
+}
+
+void StringBTree::DumpImpl(const NodeBase* node_base, int depth) {
+    print_shift(depth);
+    print_node_type(node_base);
+
+    if (node_base->type == NodeBase::Type::Inner) {
+        const auto* sbt_node = (const InnerNode*)node_base;
+        const auto* pt_root = (const PT::InnerNode*)&sbt_node->PT;
+
+        uint num_ext = 0;
+        const PT::InnerNode* pt_node = pt_root;
+        while (true) {
+            const auto* branchs = (const PT::Branch*)(pt_node + 1);
+            PT::Branch branch = branchs[pt_node->num_branch - 1];
+            if (branch.node_pos >= sbt_node->GetExtPosBegin()) {
+                num_ext = branch.node_pos + sizeof(str_pos_t) + sizeof(blk_pos_t) -
+                          sbt_node->GetExtPosBegin();
+
+                if (num_ext % sizeof(ExtItem<false>)) {
+                    throw std::runtime_error{"Incorrect ext pos"};
+                }
+
+                num_ext /= sizeof(ExtItem<false>);
+                break;
+            }
+
+            pt_node = (const PT::InnerNode*)((const u8*)pt_root + branch.node_pos);
+        }
+
+        if (num_ext % 2) {
+            throw std::runtime_error{"In inner node number leaf not even!"};
+        }
+
+        const auto* ext_begin = (const ExtItem<false>*)&sbt_node->Ext;
+        for (uint i_ext = 0; i_ext < num_ext; ++i_ext) {
+            const auto* ext = (ext_begin + i_ext);
+            const u8* data_begin = (const u8*)btree.GetData().data();
+
+            const NodeBase* child_base = (const NodeBase*)(data_begin + ext->child * g_block_size);
+            DumpImpl(child_base, depth + 1);
+        }
+    }
+}
+
+void StringBTree::Dump() {
+    DumpImpl((const NodeBase*)root, 0);
 }
 
 }  // namespace SBT

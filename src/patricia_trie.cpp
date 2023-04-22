@@ -56,7 +56,7 @@ public:
     std::string DrawTrie() const;
     void EmplaceOn(u8* dest, in_blk_pos_t dest_size) {
         EmplaceInnerNode(dest, dest_size, dest, m_root);
-        std::cout << dest_size << std::endl;
+        // std::cout << dest_size << std::endl;
     }
 
 private:
@@ -285,8 +285,8 @@ void BuildAndEmplacePT(const std::vector<std::pair<std::string_view, in_blk_pos_
         // std::cout << "ins: \"" << str << "\"\n";
     }
 
-    static int ctr = 0;
-    std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
+    // static int ctr = 0;
+    // std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
 
     pt.EmplaceOn(dest, size);
 }

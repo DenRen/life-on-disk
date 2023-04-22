@@ -28,6 +28,8 @@ void find_suff() {
     printf("\n");
 }
 
+// TODO: Implement find in SBT
+
 int main() try {
     // std::cout << SBT::InnerNode::num_leaves << std::endl;
     // std::cout << SBT::LeafNode::num_leaves << std::endl;
@@ -59,6 +61,7 @@ int main() try {
     // delete[] page;
 
     auto sbt = SBT::StringBTree::Build("btree.bin", std::string{data_path}, suff);
+    sbt.Dump();
 } catch (std::exception& exc) {
     std::cerr << "Exception: " << exc.what() << std::endl;
 }

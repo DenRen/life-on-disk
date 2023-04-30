@@ -36,7 +36,7 @@ int main() try {
     // std::cout << sizeof(SBT::InnerNode) << std::endl;
     // std::cout << sizeof(SBT::LeafNode) << std::endl;
 
-#if 1
+#if 0
     const std::string_view data_path = "../../data/Homo_sapiens.GRCh38.dna.chromosome.MT.fa";
 #else
     const std::string_view data_path = "../../data/micro";
@@ -61,7 +61,21 @@ int main() try {
     // delete[] page;
 
     auto sbt = SBT::StringBTree::Build("btree.bin", std::string{data_path}, suff);
-    sbt.Dump();
+    // sbt.Dump();
+
+    while (true) {
+        std::string str;
+        std::cin >> str;
+
+        std::string_view pattern{str};
+        std::string_view res = sbt.Search(pattern);
+        if (res.empty()) {
+            std::cout << "not found" << std::endl;
+        } else {
+            std::cout << "str: " << res.substr(0, 10) << std::endl;
+            std::cout << "len: " << res.size() << std::endl;
+        }
+    }
 } catch (std::exception& exc) {
     std::cerr << "Exception: " << exc.what() << std::endl;
 }

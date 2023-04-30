@@ -1,4 +1,5 @@
 #include "string_btree.h"
+#include "misalign.h"
 
 #include <limits>
 #include <stdexcept>
@@ -219,6 +220,69 @@ void StringBTree::DumpImpl(const NodeBase* node_base, int depth) {
 
 void StringBTree::Dump() {
     DumpImpl((const NodeBase*)root, 0);
+}
+
+std::string_view StringBTree::Search(std::string_view pattern) {
+    const PT::InnerNode* pt_root = nullptr;
+    in_blk_pos_t ext_begin = 0;
+
+    const auto* sbt_node_base = (const NodeBase*)root;
+    if (sbt_node_base->IsInner()) {
+        throw std::runtime_error{"Not implemented"};
+
+        const InnerNode* sbt_node = (const InnerNode*)sbt_node_base;
+        pt_root = (const PT::InnerNode*)&sbt_node->PT;
+        ext_begin = sbt_node->GetExtPosBegin();
+    } else {
+        const LeafNode* sbt_node = (const LeafNode*)sbt_node_base;
+        pt_root = (const PT::InnerNode*)&sbt_node->PT;
+        ext_begin = sbt_node->GetExtPosBegin();
+    }
+
+    auto [ext_pos, lcp] = PT::Search(pattern, pt_root, 0, ext_begin, text.GetData());
+
+    std::cout << "lcp: " << lcp << std::endl;
+    std::cout << "ext: " << ext_pos << std::endl;
+
+    if (sbt_node_base->IsInner()) {  // Correct ext_pos
+        using ExtItemT = InnerNode::ExtItemT;
+        in_blk_pos_t local_ext_pos = (ext_pos - ext_begin) % sizeof(ExtItemT);
+        if (local_ext_pos > 2 * sizeof(ExtItemT::left_str_pos)) {
+            ext_pos += sizeof(ExtItemT) - local_ext_pos;
+        }
+    }
+    std::cout << "dext: " << ext_pos - ext_begin << std::endl;
+
+    str_pos_t str_pos = misalign_load<str_pos_t>((const u8*)pt_root + ext_pos);
+
+    std::cout << "str_pos: " << str_pos << std::endl;
+    // DumpExt(sbt_node);
+
+    return lcp >= pattern.size() ? text.GetData().substr(str_pos) : std::string_view{};
+}
+
+void DumpExt(const NodeBase* node_base) {
+    if (node_base->type == NodeBase::Type::Inner) {
+        const InnerNode* node = (const InnerNode*)node_base;
+        const auto* ext_begin = node->ExtBegin();
+        const auto* ext_end = (const ExtItem<false>*)(&node->Ext + 1);
+        for (auto ext_it = ext_begin; ext_it < ext_end; ++ext_it) {
+            if (ext_it != ext_begin) {
+                std::cout << ", ";
+            }
+            std::cout << ext_it->left_str_pos << ", " << ext_it->right_str_pos;
+        }
+    } else {
+        const LeafNode* node = (const LeafNode*)node_base;
+        const auto* ext_begin = node->ExtBegin();
+        const auto* ext_end = (const ExtItem<true>*)(&node->Ext + 1);
+        for (auto ext_it = ext_begin; ext_it < ext_end; ++ext_it) {
+            if (ext_it != ext_begin) {
+                std::cout << ", ";
+            }
+            std::cout << ext_it->str_pos;
+        }
+    }
 }
 
 }  // namespace SBT

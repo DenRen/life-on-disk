@@ -41,32 +41,49 @@ constexpr uint CalcPTNumLeaf(int pt_ext_size) noexcept {
 PACKED_STRUCT NodeBase {
     enum class Type : u8 { Inner, Leaf };
     Type type;
+
+    NodeBase(Type type)
+        : type{type} {}
+
+    bool IsLeaf() const noexcept {
+        return type == Type::Leaf;
+    }
+    bool IsInner() const noexcept {
+        return type == Type::Inner;
+    }
 };
 
-template <bool IsLeaf>
+template <bool IsLeafV>
 PACKED_STRUCT Node : public NodeBase {
     Node() noexcept
-        : NodeBase{IsLeaf ? Type::Leaf : Type::Inner} {}
+        : NodeBase{IsLeafV ? Type::Leaf : Type::Inner} {}
 
-    constexpr static uint num_leaves = CalcPTNumLeaf<IsLeaf>(g_block_size - sizeof(NodeBase));
-    std::array<uint8_t, NodeSectionsSize<IsLeaf, num_leaves>::PT> PT;
-    std::array<uint8_t, NodeSectionsSize<IsLeaf, num_leaves>::Ext> Ext;
+    constexpr static uint num_leaves = CalcPTNumLeaf<IsLeafV>(g_block_size - sizeof(NodeBase));
+    std::array<uint8_t, NodeSectionsSize<IsLeafV, num_leaves>::PT> PT;
+    std::array<uint8_t, NodeSectionsSize<IsLeafV, num_leaves>::Ext> Ext;
 
-    ExtItem<IsLeaf>* ExtBegin() noexcept {
-        return (ExtItem<IsLeaf>*)&Ext;
+    using ExtItemT = ExtItem<IsLeafV>;
+
+    ExtItemT* ExtBegin() noexcept {
+        return (ExtItemT*)&Ext;
+    }
+
+    const ExtItemT* ExtBegin() const noexcept {
+        return (const ExtItemT*)&Ext;
     }
 
     in_blk_pos_t GetExtPosBegin() const noexcept {
         return (const u8*)&Ext - (const u8*)&PT;
     }
-}
-__attribute__((aligned(g_block_size)));
+};
 
-static_assert(sizeof(Node<true>) == g_block_size);
-static_assert(sizeof(Node<false>) == g_block_size);
+static_assert(sizeof(Node<true>) <= g_block_size);
+static_assert(sizeof(Node<false>) <= g_block_size);
 
 using InnerNode = Node<false>;
 using LeafNode = Node<true>;
+
+void DumpExt(const NodeBase* node_base);
 
 class StringBTree {
 public:
@@ -75,6 +92,8 @@ public:
 
     static StringBTree Build(std::string sbt_dest_path, std::string path_text,
                              const std::vector<str_len_t>& suff_arr);
+
+    std::string_view Search(std::string_view pattern);
 
     void Dump();
 

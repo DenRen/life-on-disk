@@ -1,5 +1,6 @@
 #include "patricia_trie.h"
 #include "file_mapper.h"
+#include "misalign.h"
 
 #include <variant>
 #include <map>
@@ -285,10 +286,150 @@ void BuildAndEmplacePT(const std::vector<std::pair<std::string_view, in_blk_pos_
         // std::cout << "ins: \"" << str << "\"\n";
     }
 
-    // static int ctr = 0;
-    // std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
+    static int ctr = 0;
+    std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
 
     pt.EmplaceOn(dest, size);
+}
+
+const Branch* LowerBound(const Branch* begin, const Branch* end, char_t symb) {
+    return std::lower_bound(begin, end, symb, [](const Branch& lhs, char_t cur_symb) {
+        return lhs.symb < cur_symb;
+    });
+}
+
+SearchResult Search(std::string_view pattern, const InnerNode* root, str_len_t last_lcp,
+                    in_blk_pos_t ext_pos_begin, std::string_view text) {
+    const InnerNode* node = root;
+    in_blk_pos_t ext_pos = 0;
+
+    auto get_node = [root](in_blk_pos_t node_pos) {
+        return (const InnerNode*) ((const u8*)root + node_pos);
+    };
+
+    auto find_leftmost_ext = [ext_pos_begin, &get_node](const Branch* branchs_begin) {
+        const InnerNode* node = nullptr;
+        while (branchs_begin[0].node_pos < ext_pos_begin) {
+            node = get_node(branchs_begin[0].node_pos);
+            branchs_begin = node->GetBranchs();
+        }
+        return branchs_begin[0].node_pos;
+    };
+
+    auto find_rightmost_ext = [ext_pos_begin, &get_node](const InnerNode* node) {
+        const Branch* branchs_begin = node->GetBranchs();
+        while (branchs_begin[node->num_branch - 1].node_pos < ext_pos_begin) {
+            node = get_node(branchs_begin[node->num_branch - 1].node_pos);
+            branchs_begin = node->GetBranchs();
+        }
+        return branchs_begin[node->num_branch - 1].node_pos;
+    };
+
+    // First phase
+    while (true) {
+        char_t cur_symb = pattern.size() > node->len ? pattern[node->len] : '\0';
+
+        const Branch* branchs_begin = node->GetBranchs();
+        const Branch* branchs_end = branchs_begin + node->num_branch;
+        const Branch* branch = LowerBound(branchs_begin, branchs_end, cur_symb);
+        if (branch != branchs_end) {
+            if (branch->symb == cur_symb) {
+                if (branch->node_pos < ext_pos_begin) {
+                    node = get_node(branch->node_pos);
+                } else {
+                    ext_pos = branch->node_pos;
+                    break;
+                }
+            } else {
+                ext_pos = find_leftmost_ext(branchs_begin);
+                break;
+            }
+        } else {
+            ext_pos = find_leftmost_ext(branchs_begin);
+            break;
+        }
+    }
+
+    // str_pos_t str_pos = *(const str_pos_t*)((const u8*)root + ext_pos);
+    str_pos_t str_pos = misalign_load<str_pos_t>((const u8*)root + ext_pos);
+
+    // Find lcp
+    str_len_t lcp = last_lcp;
+    str_len_t max_lcp = (str_len_t)std::min(pattern.size(), text.substr(str_pos).size());
+    for (; lcp < max_lcp; ++lcp) {
+        if (pattern[lcp] != text[str_pos + lcp]) {
+            break;
+        }
+    }
+
+    // Find hit node as position in PT
+    in_blk_pos_t hit_node_pos = 0;
+    node = root;
+    while (true) {
+        if (node->len >= lcp) {
+            hit_node_pos = (const u8*)node - (const u8*)root;
+            break;
+        }
+
+        char_t cur_symb = pattern.size() > node->len ? pattern[node->len] : '\0';
+
+        const Branch* branchs_begin = node->GetBranchs();
+        const Branch* branchs_end = branchs_begin + node->num_branch;
+        const Branch* branch = LowerBound(branchs_begin, branchs_end, cur_symb);
+        if (branch == branchs_end || branch->symb != cur_symb) {
+            throw std::runtime_error{"Failed to find hit node" +
+                                     std::to_string(branch != branchs_end)};
+        }
+
+        if (branch->node_pos >= ext_pos_begin) {
+            hit_node_pos = branch->node_pos;
+            break;
+        }
+
+        node = get_node(branch->node_pos);
+    }
+
+    // Second phase
+    if (hit_node_pos < ext_pos_begin) {  // Hit node is not leaf
+        char_t pat_symb = pattern[lcp];
+        char_t text_symb = text[lcp];
+        node = get_node(hit_node_pos);
+        const Branch* branchs_begin = node->GetBranchs();
+        const Branch* branchs_end = branchs_begin + node->num_branch;
+
+        if (lcp == node->len) {
+            if (pat_symb < branchs_begin->symb) {
+                ext_pos = find_leftmost_ext(branchs_begin);
+            } else if (pat_symb > (branchs_end - 1)->symb) {
+                ext_pos = find_rightmost_ext(node);
+            } else {
+                const Branch* branch = LowerBound(branchs_begin, branchs_end, pat_symb);
+                ext_pos = find_leftmost_ext(branch);
+            }
+        } else {  // lcp < node->len
+            if (pat_symb < text_symb) {
+                ext_pos = find_leftmost_ext(branchs_begin);
+            } else {
+                ext_pos = find_rightmost_ext(node);
+            }
+        }
+    } else {  // Hit node is leaf
+        if (lcp == node->len) {
+            ext_pos = hit_node_pos;
+        } else {
+            char_t pat_symb = pattern[lcp];
+            char_t text_symb = text[lcp];
+            assert(pat_symb != text_symb);
+            if (pat_symb < text_symb) {
+                ext_pos = hit_node_pos;
+            } else {
+                // Next ext_pos
+                ext_pos = hit_node_pos + 1;  // Fucking prototyping!!!
+            }
+        }
+    }
+
+    return SearchResult{.ext_node_pos = ext_pos, .lcp = lcp};
 }
 
 }  // namespace PT

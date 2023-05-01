@@ -1,13 +1,14 @@
 #pragma once
 
+#include "file_mapper.h"
+#include "misalign.h"
+
 #include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
-
-#include "file_mapper.h"
 
 namespace PT {
 
@@ -52,5 +53,60 @@ constexpr uint CalcMaxSize(uint num_leafs) noexcept {
 
 void BuildAndEmplacePT(const std::vector<std::pair<std::string_view, in_blk_pos_t>>& strs, u8* dest,
                        size_t size);
+
+class Wrapper {
+public:
+    Wrapper(const InnerNode* root, in_blk_pos_t ext_pos_begin) noexcept
+        : m_root{root}
+        , m_ext_pos_begin{ext_pos_begin} {}
+
+    Wrapper(const u8* root, in_blk_pos_t ext_pos_begin) noexcept
+        : Wrapper{(const InnerNode*)root, ext_pos_begin} {}
+
+    const InnerNode* GetNode(in_blk_pos_t node_pos) const noexcept {
+        return (const InnerNode*)((const u8*)m_root + node_pos);
+    };
+
+    in_blk_pos_t GetExtPos() const noexcept {
+        return m_ext_pos_begin;
+    }
+    const InnerNode* GetRoot() const noexcept {
+        return m_root;
+    }
+
+    in_blk_pos_t GetLeftmostNode(const InnerNode* node) const noexcept {
+        const Branch* branchs_begin = node->GetBranchs();
+        while (branchs_begin[0].node_pos < m_ext_pos_begin) {
+            node = GetNode(branchs_begin[0].node_pos);
+            branchs_begin = node->GetBranchs();
+        }
+        return branchs_begin[0].node_pos;
+    }
+
+    in_blk_pos_t GetRightmostNode(const InnerNode* node) const noexcept {
+        const Branch* branchs_begin = node->GetBranchs();
+        while (branchs_begin[node->num_branch - 1].node_pos < m_ext_pos_begin) {
+            node = GetNode(branchs_begin[node->num_branch - 1].node_pos);
+            branchs_begin = node->GetBranchs();
+        }
+        return branchs_begin[node->num_branch - 1].node_pos;
+    }
+
+    str_pos_t GetStr(in_blk_pos_t ext_pos) const noexcept {
+        return misalign_load<str_pos_t>((const u8*)m_root + ext_pos);
+    }
+
+    str_pos_t GetLeftmostStr() const noexcept {
+        return GetStr(m_ext_pos_begin);
+    }
+
+    str_pos_t GetRightmostStr() const noexcept {
+        return GetStr(GetRightmostNode(m_root));
+    }
+
+private:
+    const InnerNode* m_root;
+    in_blk_pos_t m_ext_pos_begin;
+};
 
 }  // namespace PT

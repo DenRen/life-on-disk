@@ -37,7 +37,7 @@ class PatriciaTrieNaive {
         InnerNode(str_len_t len)
             : Node{len, Node::Type::Inner} {}
 
-        std::map<char_t, Node*> childs;
+        std::map<char_t, Node*, decltype(CompareChar)> childs{CompareChar};
     };
 
     struct LeafNode : public Node {
@@ -286,20 +286,21 @@ void BuildAndEmplacePT(const std::vector<std::pair<std::string_view, in_blk_pos_
         // std::cout << "ins: \"" << str << "\"\n";
     }
 
-    static int ctr = 0;
-    std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
+    // static int ctr = 0;
+    // std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
 
     pt.EmplaceOn(dest, size);
 }
 
 const Branch* LowerBound(const Branch* begin, const Branch* end, char_t symb) {
     return std::lower_bound(begin, end, symb, [](const Branch& lhs, char_t cur_symb) {
-        return lhs.symb < cur_symb;
+        return CompareChar(lhs.symb, cur_symb);
     });
 }
 
 SearchResult Search(std::string_view pattern, const InnerNode* root, str_len_t last_lcp,
                     in_blk_pos_t ext_pos_begin, std::string_view text) {
+    // TODO: Rewrite from PT::Wrapper
     const InnerNode* node = root;
     in_blk_pos_t ext_pos = 0;
 
@@ -392,25 +393,25 @@ SearchResult Search(std::string_view pattern, const InnerNode* root, str_len_t l
     // Second phase
     if (hit_node_pos < ext_pos_begin) {  // Hit node is not leaf
         char_t pat_symb = pattern[lcp];
-        char_t text_symb = text[lcp];
+        char_t text_symb = text[str_pos + lcp];
         node = get_node(hit_node_pos);
         const Branch* branchs_begin = node->GetBranchs();
         const Branch* branchs_end = branchs_begin + node->num_branch;
 
         if (lcp == node->len) {
-            if (pat_symb < branchs_begin->symb) {
+            if (CompareChar(pat_symb, branchs_begin->symb)) {
                 ext_pos = find_leftmost_ext(branchs_begin);
-            } else if (pat_symb > (branchs_end - 1)->symb) {
-                ext_pos = find_rightmost_ext(node);
+            } else if (CompareChar((branchs_end - 1)->symb, pat_symb)) {
+                ext_pos = find_rightmost_ext(node) + sizeof(str_pos);
             } else {
                 const Branch* branch = LowerBound(branchs_begin, branchs_end, pat_symb);
                 ext_pos = find_leftmost_ext(branch);
             }
         } else {  // lcp < node->len
-            if (pat_symb < text_symb) {
+            if (CompareChar(pat_symb, text_symb)) {
                 ext_pos = find_leftmost_ext(branchs_begin);
             } else {
-                ext_pos = find_rightmost_ext(node);
+                ext_pos = find_rightmost_ext(node) + sizeof(str_pos);
             }
         }
     } else {  // Hit node is leaf
@@ -420,11 +421,11 @@ SearchResult Search(std::string_view pattern, const InnerNode* root, str_len_t l
             char_t pat_symb = pattern[lcp];
             char_t text_symb = text[lcp];
             assert(pat_symb != text_symb);
-            if (pat_symb < text_symb) {
+            if (CompareChar(pat_symb, text_symb)) {
                 ext_pos = hit_node_pos;
             } else {
                 // Next ext_pos
-                ext_pos = hit_node_pos + 1;  // Fucking prototyping!!!
+                ext_pos = hit_node_pos + sizeof(str_pos);  // Fucking prototyping!!!
             }
         }
     }

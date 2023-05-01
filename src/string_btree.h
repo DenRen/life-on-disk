@@ -75,6 +75,10 @@ PACKED_STRUCT Node : public NodeBase {
     in_blk_pos_t GetExtPosBegin() const noexcept {
         return (const u8*)&Ext - (const u8*)&PT;
     }
+
+    PT::Wrapper GetPT() const noexcept {
+        return {(const u8*)&PT, GetExtPosBegin()};
+    }
 };
 
 static_assert(sizeof(Node<true>) <= g_block_size);
@@ -82,6 +86,8 @@ static_assert(sizeof(Node<false>) <= g_block_size);
 
 using InnerNode = Node<false>;
 using LeafNode = Node<true>;
+
+PT::Wrapper GetPT(const NodeBase* node_base) noexcept;
 
 void DumpExt(const NodeBase* node_base);
 
@@ -99,11 +105,16 @@ public:
 
 private:
     void DumpImpl(const NodeBase* node_base, int depth);
+    const NodeBase* GetNodeBase(blk_pos_t blk_pos) const noexcept;
 
 private:
-    FileMapperRead btree;
-    FileMapperRead text;
-    const u8* root;
+    FileMapperRead m_btree;
+    FileMapperRead m_text;
+    const u8* m_root;
+
+    // Cache
+    str_pos_t m_leftmost_str;
+    str_pos_t m_rightmost_str;
 };
 
 }  // namespace SBT

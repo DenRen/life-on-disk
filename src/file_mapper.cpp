@@ -34,19 +34,20 @@ FileMapperRead::~FileMapperRead() {
     munmap((void*)m_data, m_size);
 }
 
-std::vector<str_len_t> BuildSortedSuff(std::string_view str) {
-    std::vector<str_len_t> suff;
+std::vector<str_pos_t> BuildSortedSuff(std::string_view str) {
+    std::vector<str_pos_t> suff;
     suff.resize(str.size());
     for (str_pos_t pos = 0; pos < suff.size(); ++pos) {
         suff[pos] = pos;
     }
 
+#if 1
     std::sort(std::begin(suff), std::end(suff), [&str](auto lhs, auto rhs) noexcept {
         std::string_view lhs_sv{str.data() + lhs, str.size() - lhs};
         std::string_view rhs_sv{str.data() + rhs, str.size() - rhs};
         return lhs_sv < rhs_sv;
     });
-
+#endif
     return suff;
 }
 

@@ -40,7 +40,6 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
     }
 
     std::string_view text = text_mapper.GetData();
-
     const blk_pos_t num_blocks = CalcCommonNumBlock((str_len_t)suff_arr.size());
     FileMapperWrite sbt_file(sbt_dest_path, num_blocks * g_block_size);
     auto [dest_data, dest_size] = sbt_file.GetData();
@@ -52,32 +51,32 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
     u8* cur_dest = dest_data;
     const blk_pos_t num_leaf_node = DivUp(num_strings, LeafNode::num_leaves);
 
-    // Split lay on: [left] [left] [left] ... [left] [right], right >= left
-    str_len_t node_num_str_left = num_strings / DivUp(num_strings, LeafNode::num_leaves);
-    str_len_t node_num_str_right =
-        node_num_str_left + num_strings % DivUp(num_strings, LeafNode::num_leaves);
+    // Split lay on: [left] [left] [left] ... [right] [right], right >= left
+    str_len_t node_num_str_left = num_strings / num_leaf_node;
+    str_len_t node_num_str_right = node_num_str_left + 1;
+    str_len_t num_right = num_strings - node_num_str_left * num_leaf_node;
 
-    std::vector<ExtItem<false>> exts(num_leaf_node);
-
+    str_pos_t i_str_begin = 0;
+    std::vector<InnerNode::ExtItemT> exts(num_leaf_node);
     for (blk_pos_t i_node_leaf = 0; i_node_leaf < num_leaf_node; ++i_node_leaf) {
         LeafNode* node = new (cur_dest) LeafNode;
-        cur_dest = (u8*)(node + 1);
+        cur_dest = (u8*)node + g_block_size;
 
         str_len_t node_num_str =
-            i_node_leaf + 1 < num_leaf_node ? node_num_str_left : node_num_str_right;
+            i_node_leaf < (num_leaf_node - num_right) ? node_num_str_left : node_num_str_right;
 
         std::vector<std::pair<std::string_view, in_blk_pos_t>> strs(node_num_str);
 
-        ExtItem<true>* ext_poss = node->ExtBegin();
+        LeafNode::ExtItemT* ext_poss = node->ExtBegin();
         u8* addr_begin = (u8*)&node->PT;
 
-        str_pos_t i_str_begin = i_node_leaf * node_num_str_left;
         str_pos_t i_str_end = i_str_begin + node_num_str;
         for (str_len_t i_str = i_str_begin; i_str < i_str_end; ++i_str) {
             str_pos_t i = i_str - i_str_begin;
             ext_poss[i].str_pos = (str_pos_t)suff_arr[i_str];
             strs[i] = {text.substr(ext_poss[i].str_pos), (u8*)&ext_poss[i].str_pos - addr_begin};
         }
+        i_str_begin += node_num_str;
 
         PT::BuildAndEmplacePT(strs, addr_begin, sizeof(node->PT));
 
@@ -87,29 +86,34 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
         }
     }
 
+    std::cout << "R: " << text.substr(exts.back().right_str_pos, 20) << std::endl;
+
     if (num_leaf_node == 1) {
         return {sbt_dest_path, path_text};
     }
 
     str_pos_t prev_layer_num_node = num_leaf_node;
+
     while (true) {
         // Build inner layer
 
         str_pos_t layer_num_node = DivUp(prev_layer_num_node, InnerNode::num_leaves / 2);
         str_len_t num_child_left = prev_layer_num_node / layer_num_node;
-        str_len_t num_child_right = num_child_left + prev_layer_num_node % layer_num_node;
+        str_len_t num_child_right = num_child_left + 1;
+        str_len_t num_right = prev_layer_num_node - num_child_left * layer_num_node;
 
         auto ext_it = exts.cbegin();
         blk_pos_t layer_blk_pos_begin = exts.back().child + 1;
         for (blk_pos_t i_node = 0; i_node < layer_num_node; ++i_node) {
             InnerNode* node = new (cur_dest) InnerNode;
-            cur_dest = (u8*)(node + 1);
+            cur_dest = (u8*)node + g_block_size;
 
-            str_len_t num_child = i_node + 1 < num_leaf_node ? num_child_left : num_child_right;
+            str_len_t num_child =
+                i_node < (layer_num_node - num_right) ? num_child_left : num_child_right;
 
             std::vector<std::pair<std::string_view, in_blk_pos_t>> strs(2 * num_child);
 
-            ExtItem<false>* ext_poss = node->ExtBegin();
+            InnerNode::ExtItemT* ext_poss = node->ExtBegin();
             u8* addr_begin = (u8*)&node->PT;
 
             for (str_len_t i_child = 0; i_child < num_child; ++i_child) {
@@ -128,6 +132,13 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
                                 layer_blk_pos_begin + i_node};
             }
         }
+        std::cout << "R: " << text.substr(exts.back().right_str_pos, 20) << std::endl;
+        if (ext_it != exts.cend()) {
+            std::cout << std::distance(exts.cbegin(), ext_it) << std::endl;
+            throw std::runtime_error{"Incorrect construct SBT"};
+        } else {
+            std::cout << "Good!\n";
+        }
 
         if (layer_num_node == 1) {  // Is root
             break;
@@ -141,9 +152,9 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
 }
 
 StringBTree::StringBTree(std::string path_sbt, std::string path_text)
-    : btree{path_sbt}
-    , text{path_text} {
-    auto sv_btree = btree.GetData();
+    : m_btree{path_sbt}
+    , m_text{path_text} {
+    auto sv_btree = m_btree.GetData();
     const auto btree_num_blocks = sv_btree.size() / g_block_size;
 
     if (sv_btree.size() % g_block_size) {
@@ -151,12 +162,18 @@ StringBTree::StringBTree(std::string path_sbt, std::string path_text)
     }
 
     if (btree_num_blocks > 1) {
-        root = (const u8*)sv_btree.end() - g_block_size;
+        m_root = (const u8*)sv_btree.end() - g_block_size;
     } else if (btree_num_blocks == 1) {
-        root = (const u8*)sv_btree.data();
+        m_root = (const u8*)sv_btree.data();
     } else {
         throw std::runtime_error{"Size of btree too small"};
     }
+
+    const NodeBase* root_node_base = (const NodeBase*)m_root;
+    PT::Wrapper pt = GetPT(root_node_base);
+
+    m_leftmost_str = pt.GetLeftmostStr();
+    m_rightmost_str = pt.GetRightmostStr();
 }
 
 static void print_shift(int depth) {
@@ -210,7 +227,7 @@ void StringBTree::DumpImpl(const NodeBase* node_base, int depth) {
         const auto* ext_begin = (const ExtItem<false>*)&sbt_node->Ext;
         for (uint i_ext = 0; i_ext < num_ext; ++i_ext) {
             const auto* ext = (ext_begin + i_ext);
-            const u8* data_begin = (const u8*)btree.GetData().data();
+            const u8* data_begin = (const u8*)m_btree.GetData().data();
 
             const NodeBase* child_base = (const NodeBase*)(data_begin + ext->child * g_block_size);
             DumpImpl(child_base, depth + 1);
@@ -219,46 +236,64 @@ void StringBTree::DumpImpl(const NodeBase* node_base, int depth) {
 }
 
 void StringBTree::Dump() {
-    DumpImpl((const NodeBase*)root, 0);
+    DumpImpl((const NodeBase*)m_root, 0);
+}
+
+const NodeBase* StringBTree::GetNodeBase(blk_pos_t blk_pos) const noexcept {
+    return (const NodeBase*)((const u8*)m_btree.GetData().data() + blk_pos * g_block_size);
 }
 
 std::string_view StringBTree::Search(std::string_view pattern) {
-    const PT::InnerNode* pt_root = nullptr;
-    in_blk_pos_t ext_begin = 0;
+    std::string_view text = m_text.GetData();
 
-    const auto* sbt_node_base = (const NodeBase*)root;
-    if (sbt_node_base->IsInner()) {
-        throw std::runtime_error{"Not implemented"};
-
-        const InnerNode* sbt_node = (const InnerNode*)sbt_node_base;
-        pt_root = (const PT::InnerNode*)&sbt_node->PT;
-        ext_begin = sbt_node->GetExtPosBegin();
-    } else {
-        const LeafNode* sbt_node = (const LeafNode*)sbt_node_base;
-        pt_root = (const PT::InnerNode*)&sbt_node->PT;
-        ext_begin = sbt_node->GetExtPosBegin();
+    std::string_view leftmost_str = text.substr(m_leftmost_str);
+    if (pattern <= leftmost_str) {
+        return leftmost_str;
+    }
+    std::string_view rightmost_str = text.substr(m_rightmost_str);
+    if (pattern > rightmost_str) {
+        return rightmost_str;
     }
 
-    auto [ext_pos, lcp] = PT::Search(pattern, pt_root, 0, ext_begin, text.GetData());
+    str_pos_t str_pos = 0;
+    str_len_t cur_lcp = 0;
+    const NodeBase* sbt_node_base = (const NodeBase*)m_root;
+    while (true) {
+        PT::Wrapper pt = GetPT(sbt_node_base);
 
-    std::cout << "lcp: " << lcp << std::endl;
-    std::cout << "ext: " << ext_pos << std::endl;
+        const auto* pt_root = pt.GetRoot();
+        const auto ext_begin = pt.GetExtPos();
 
-    if (sbt_node_base->IsInner()) {  // Correct ext_pos
-        using ExtItemT = InnerNode::ExtItemT;
-        in_blk_pos_t local_ext_pos = (ext_pos - ext_begin) % sizeof(ExtItemT);
-        if (local_ext_pos > 2 * sizeof(ExtItemT::left_str_pos)) {
-            ext_pos += sizeof(ExtItemT) - local_ext_pos;
+        auto [ext_pos, lcp] = PT::Search(pattern, pt_root, cur_lcp, ext_begin, text);
+        cur_lcp = lcp;
+
+        if (sbt_node_base->IsInner()) {
+            // Correct ext_pos
+            using ExtItemT = InnerNode::ExtItemT;
+            in_blk_pos_t local_ext_pos = (ext_pos - ext_begin) % sizeof(ExtItemT);
+            if (local_ext_pos > sizeof(str_pos_t)) {
+                ext_pos += sizeof(ExtItemT) - local_ext_pos;
+                local_ext_pos = 0;
+            }
+
+            auto ext_item = misalign_load<ExtItemT>((const u8*)pt_root + ext_pos - local_ext_pos);
+            if (local_ext_pos == 0) {
+                // L
+                str_pos = pt.GetStr(ext_pos);
+                break;
+            } else if (local_ext_pos == sizeof(str_pos_t)) {
+                // R
+                sbt_node_base = GetNodeBase(ext_item.child);
+            } else {
+                throw std::runtime_error{""};
+            }
+        } else {
+            str_pos = pt.GetStr(ext_pos);
+            break;
         }
     }
-    std::cout << "dext: " << ext_pos - ext_begin << std::endl;
 
-    str_pos_t str_pos = misalign_load<str_pos_t>((const u8*)pt_root + ext_pos);
-
-    std::cout << "str_pos: " << str_pos << std::endl;
-    // DumpExt(sbt_node);
-
-    return lcp >= pattern.size() ? text.GetData().substr(str_pos) : std::string_view{};
+    return cur_lcp >= pattern.size() ? text.substr(str_pos) : std::string_view{};
 }
 
 void DumpExt(const NodeBase* node_base) {
@@ -283,6 +318,11 @@ void DumpExt(const NodeBase* node_base) {
             std::cout << ext_it->str_pos;
         }
     }
+}
+
+PT::Wrapper GetPT(const NodeBase* node_base) noexcept {
+    return node_base->IsInner() ? ((const InnerNode*)node_base)->GetPT()
+                                : ((const LeafNode*)node_base)->GetPT();
 }
 
 }  // namespace SBT

@@ -67,6 +67,10 @@ public:
         return (const InnerNode*)((const u8*)m_root + node_pos);
     };
 
+    in_blk_pos_t GetNodePos(const InnerNode* node) const noexcept {
+        return (const u8*)node - (const u8*)m_root;
+    }
+
     in_blk_pos_t GetExtPos() const noexcept {
         return m_ext_pos_begin;
     }
@@ -74,8 +78,9 @@ public:
         return m_root;
     }
 
-    in_blk_pos_t GetLeftmostNode(const InnerNode* node) const noexcept {
-        const Branch* branchs_begin = node->GetBranchs();
+    in_blk_pos_t GetLeftmostExt(const Branch* branch) const noexcept {
+        const InnerNode* node = nullptr;
+        const Branch* branchs_begin = branch;
         while (branchs_begin[0].node_pos < m_ext_pos_begin) {
             node = GetNode(branchs_begin[0].node_pos);
             branchs_begin = node->GetBranchs();
@@ -83,7 +88,11 @@ public:
         return branchs_begin[0].node_pos;
     }
 
-    in_blk_pos_t GetRightmostNode(const InnerNode* node) const noexcept {
+    in_blk_pos_t GetLeftmostExt(const InnerNode* node) const noexcept {
+        return GetLeftmostExt(node->GetBranchs());
+    }
+
+    in_blk_pos_t GetRightmostExt(const InnerNode* node) const noexcept {
         const Branch* branchs_begin = node->GetBranchs();
         while (branchs_begin[node->num_branch - 1].node_pos < m_ext_pos_begin) {
             node = GetNode(branchs_begin[node->num_branch - 1].node_pos);
@@ -101,7 +110,7 @@ public:
     }
 
     str_pos_t GetRightmostStr() const noexcept {
-        return GetStr(GetRightmostNode(m_root));
+        return GetStr(GetRightmostExt(m_root));
     }
 
 private:

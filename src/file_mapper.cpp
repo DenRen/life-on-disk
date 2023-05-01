@@ -23,11 +23,6 @@ FileMapperRead::FileMapperRead(std::string_view path) {
         perror("mmap");
         throw std::runtime_error("Failed to map file");
     }
-
-    // if (m_data[m_size - 1] != '\0') {
-    //     std::cerr << (int)m_data[m_size - 1] << std::endl;
-    //     throw std::runtime_error("String not zero terminated");
-    // }
 }
 
 FileMapperRead::~FileMapperRead() {
@@ -41,13 +36,12 @@ std::vector<str_pos_t> BuildSortedSuff(std::string_view str) {
         suff[pos] = pos;
     }
 
-#if 1
     std::sort(std::begin(suff), std::end(suff), [&str](auto lhs, auto rhs) noexcept {
         std::string_view lhs_sv{str.data() + lhs, str.size() - lhs};
         std::string_view rhs_sv{str.data() + rhs, str.size() - rhs};
         return lhs_sv < rhs_sv;
     });
-#endif
+
     return suff;
 }
 

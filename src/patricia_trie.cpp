@@ -56,16 +56,23 @@ public:
     void Insert(std::string_view str, in_blk_pos_t ext_node_pos);
     std::string DrawTrie() const;
     void EmplaceOn(u8* dest, in_blk_pos_t dest_size) {
-        EmplaceInnerNode(dest, dest_size, dest, m_root);
+        try {
+            uint n_node = 0;
+            EmplaceInnerNode(dest, dest_size, dest, m_root, n_node);
+        } catch (...) {
+            std::ofstream{"DestEmpty.dot"} << DrawTrie();
+            throw;
+        }
         // std::cout << dest_size << std::endl;
     }
 
 private:
     static void DestructInnerNode(InnerNode* node) noexcept;
     static u8* EmplaceInnerNode(u8* dest, in_blk_pos_t& dest_size, u8* dest_begin,
-                                const InnerNode* node_src);
+                                const InnerNode* node_src, uint& n_node);
 
-    void DrawTrieImpl(const Node* node, std::string& init_nodes, std::string& conns) const;
+    static std::string DrawTrie(const InnerNode* root);
+    static void DrawTrieImpl(const Node* node, std::string& init_nodes, std::string& conns);
     std::tuple<InnerNode*, str_len_t, char_t> SearchInsertNode(std::string_view str);
     static LeafNode* FindLeftmostLeaf(Node* node);
 
@@ -89,14 +96,14 @@ PatriciaTrieNaive::~PatriciaTrieNaive() {
     DestructInnerNode(m_root);
 }
 
-std::string PatriciaTrieNaive::DrawTrie() const {
+std::string PatriciaTrieNaive::DrawTrie(const InnerNode* root) {
     std::string dot =
         "digraph {\n"
         "\tgraph [rankdir = \"TB\"];\n"
         "\tnode [shape = record];";
 
     std::string init_nodes, conns;
-    DrawTrieImpl(m_root, init_nodes, conns);
+    DrawTrieImpl(root, init_nodes, conns);
 
     dot += "\n";
     dot += init_nodes;
@@ -107,8 +114,12 @@ std::string PatriciaTrieNaive::DrawTrie() const {
     return dot;
 }
 
+std::string PatriciaTrieNaive::DrawTrie() const {
+    return DrawTrie(m_root);
+}
+
 void PatriciaTrieNaive::DrawTrieImpl(const Node* node, std::string& init_nodes,
-                                     std::string& conns) const {
+                                     std::string& conns) {
     auto get_node_name = [&](const Node* node) {
         return "node" + std::to_string((uint64_t)node);
     };
@@ -192,7 +203,9 @@ void PatriciaTrieNaive::Insert(std::string_view str, in_blk_pos_t ext_node_pos) 
         it->second = new_inn_node;
     }
 }
-
+/*
+    TODO: Нужно добавить '\0' в конец каждой строки, иначе возникает неопределённость с \n и \n\n
+*/
 std::tuple<PatriciaTrieNaive::InnerNode*, str_len_t, char_t> PatriciaTrieNaive::SearchInsertNode(
     std::string_view str) {
     Node* node = m_root;
@@ -240,20 +253,21 @@ PatriciaTrieNaive::LeafNode* PatriciaTrieNaive::FindLeftmostLeaf(Node* node) {
 }
 
 u8* PatriciaTrieNaive::EmplaceInnerNode(u8* dest, in_blk_pos_t& dest_size, u8* dest_begin,
-                                        const InnerNode* node_src) {
+                                        const InnerNode* node_src, uint& n_node) {
     auto* node_dest = (PT::InnerNode*)dest;
 
     auto* branch = (Branch*)(node_dest + 1);
     auto* branch_end = branch + node_src->childs.size();
 
     const in_blk_pos_t emplace_size = (u8*)branch_end - dest;
-    // std::cout << "size: " << emplace_size << std::endl;
+    // std::cout << "size: " << emplace_size << ", dest size: " << dest_size << std::endl;
     if (emplace_size > dest_size) {
-        throw std::runtime_error("Destinantion is empty!");
+        throw std::runtime_error("Destinantion is empty! n_node: " + std::to_string(n_node));
     }
     dest_size -= emplace_size;
 
     *node_dest = {node_src->len, (alph_size_t)node_src->childs.size()};
+    ++n_node;
 
     dest = (u8*)branch_end;
     for (auto [branch_symb, child] : node_src->childs) {
@@ -261,10 +275,11 @@ u8* PatriciaTrieNaive::EmplaceInnerNode(u8* dest, in_blk_pos_t& dest_size, u8* d
 
         if (child->IsInner()) {
             branch->node_pos = dest - dest_begin;
-            dest = EmplaceInnerNode(dest, dest_size, dest_begin, (InnerNode*)child);
+            dest = EmplaceInnerNode(dest, dest_size, dest_begin, (InnerNode*)child, n_node);
         } else if (child->IsLeaf()) {
             const auto* leaf = (const LeafNode*)child;
             branch->node_pos = leaf->ext_pos;
+            ++n_node;
         } else {
             throw std::runtime_error("Undefined node type");
         }

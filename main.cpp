@@ -5,21 +5,21 @@
 #include "src/string_btree.h"
 
 int main() try {
-    // std::cout << SBT::InnerNode::num_leaves << std::endl;
-    // std::cout << SBT::LeafNode::num_leaves << std::endl;
-    // std::cout << sizeof(SBT::InnerNode) << std::endl;
-    // std::cout << sizeof(SBT::LeafNode) << std::endl;
+    std::cout << SBT::InnerNode::num_leaves << std::endl;
+    std::cout << SBT::LeafNode::num_leaves << std::endl;
+    std::cout << sizeof(SBT::InnerNode) << std::endl;
+    std::cout << sizeof(SBT::LeafNode) << std::endl;
 
 #if 1
     // const std::string_view data_path = "../../data/Homo_sapiens.GRCh38.dna.chromosome.MT.fa";
-    // const std::string_view data_path = "../../data/proteins.200MB";
-    const std::string_view data_path = "../../data/english.50MB";
+    const std::string_view data_path = "../../data/proteins.200MB";
+    // const std::string_view data_path = "../../data/english.5MB";
 #else
     const std::string_view data_path = "../../data/micro";
 #endif
 
-// #define CACHE_SA
-// #define CACHE_SBT
+#define CACHE_SA
+#define CACHE_SBT
 
 #ifndef CACHE_SBT
     FileMapperRead mapper{data_path};

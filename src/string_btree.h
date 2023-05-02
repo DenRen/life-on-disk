@@ -23,19 +23,19 @@ PACKED_STRUCT ExtItem<false> {
     constexpr static inline uint num_str = 2;
 };
 
-template <bool IsLeaf, uint NumLeaf>  // one pair of L and R is 2 leaves
+template <bool IsLeafV, uint NumLeaf>  // one pair of L and R is 2 leaves
 struct NodeSectionsSize {
     static_assert(NumLeaf >= 2);
 
     constexpr static uint PT = PT::CalcMaxSize(NumLeaf);
-    constexpr static uint Ext = NumLeaf / ExtItem<IsLeaf>::num_str * sizeof(ExtItem<IsLeaf>);
+    constexpr static uint Ext = NumLeaf / ExtItem<IsLeafV>::num_str * sizeof(ExtItem<IsLeafV>);
     constexpr static uint common = PT + Ext;
 };
 
-template <bool IsLeaf>
+template <bool IsLeafV>
 constexpr uint CalcPTNumLeaf(int pt_ext_size) noexcept {
     return 2 * pt_ext_size /
-           (NodeSectionsSize<IsLeaf, 4>::common - NodeSectionsSize<IsLeaf, 2>::common);
+           (NodeSectionsSize<IsLeafV, 52>::common - NodeSectionsSize<IsLeafV, 50>::common);
 }
 
 PACKED_STRUCT NodeBase {
@@ -58,9 +58,9 @@ PACKED_STRUCT Node : public NodeBase {
     Node() noexcept
         : NodeBase{IsLeafV ? Type::Leaf : Type::Inner} {}
 
-    constexpr static uint num_leaves = CalcPTNumLeaf<IsLeafV>(g_block_size - sizeof(NodeBase));
-    std::array<uint8_t, NodeSectionsSize<IsLeafV, num_leaves>::PT> PT;
-    std::array<uint8_t, NodeSectionsSize<IsLeafV, num_leaves>::Ext> Ext;
+    constexpr static uint num_leaves = CalcPTNumLeaf<IsLeafV>(g_block_size - sizeof(NodeBase) - 30);
+    std::array<uint8_t, NodeSectionsSize<IsLeafV, num_leaves+2>::PT> PT;
+    std::array<uint8_t, NodeSectionsSize<IsLeafV, num_leaves+2>::Ext> Ext;
 
     using ExtItemT = ExtItem<IsLeafV>;
 
@@ -81,11 +81,11 @@ PACKED_STRUCT Node : public NodeBase {
     }
 };
 
-static_assert(sizeof(Node<true>) <= g_block_size);
-static_assert(sizeof(Node<false>) <= g_block_size);
-
 using InnerNode = Node<false>;
 using LeafNode = Node<true>;
+
+static_assert(sizeof(InnerNode) <= g_block_size);
+static_assert(sizeof(LeafNode) <= g_block_size);
 
 PT::Wrapper GetPT(const NodeBase* node_base) noexcept;
 
@@ -97,7 +97,7 @@ public:
     ~StringBTree() {}
 
     static StringBTree Build(std::string sbt_dest_path, std::string path_text,
-                             const std::vector<str_len_t>& suff_arr);
+                             const std::vector<str_pos_t>& suff_arr);
 
     std::string_view Search(std::string_view pattern);
 

@@ -33,13 +33,16 @@ blk_pos_t CalcCommonNumBlock(str_len_t num_string) {
 }
 
 StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
-                               const std::vector<str_len_t>& suff_arr) {
+                               const std::vector<str_pos_t>& suff_arr) {
     FileMapperRead text_mapper{path_text};
     if (text_mapper.GetData().size() != suff_arr.size()) {
         throw std::runtime_error("Invalid size text and suff");
     }
-
     std::string_view text = text_mapper.GetData();
+
+    std::cout << "src ptr: " << (const void*)text.begin() << std::endl;
+    std::cout << "src ptr: " << (const void*)text.end() << std::endl;
+
     const blk_pos_t num_blocks = CalcCommonNumBlock((str_len_t)suff_arr.size());
     FileMapperWrite sbt_file(sbt_dest_path, num_blocks * g_block_size);
     auto [dest_data, dest_size] = sbt_file.GetData();
@@ -73,7 +76,7 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
         str_pos_t i_str_end = i_str_begin + node_num_str;
         for (str_len_t i_str = i_str_begin; i_str < i_str_end; ++i_str) {
             str_pos_t i = i_str - i_str_begin;
-            ext_poss[i].str_pos = (str_pos_t)suff_arr[i_str];
+            ext_poss[i].str_pos = suff_arr[i_str];
             strs[i] = {text.substr(ext_poss[i].str_pos), (u8*)&ext_poss[i].str_pos - addr_begin};
         }
         i_str_begin += node_num_str;
@@ -85,8 +88,6 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
                                  i_node_leaf};
         }
     }
-
-    std::cout << "R: " << text.substr(exts.back().right_str_pos, 20) << std::endl;
 
     if (num_leaf_node == 1) {
         return {sbt_dest_path, path_text};
@@ -136,8 +137,6 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string path_text,
         if (ext_it != exts.cend()) {
             std::cout << std::distance(exts.cbegin(), ext_it) << std::endl;
             throw std::runtime_error{"Incorrect construct SBT"};
-        } else {
-            std::cout << "Good!\n";
         }
 
         if (layer_num_node == 1) {  // Is root

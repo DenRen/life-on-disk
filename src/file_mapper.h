@@ -42,6 +42,10 @@ public:
         return {m_data, m_size};
     }
 
+    u8* begin() noexcept {
+        return m_data;
+    }
+
     void Truncate(uint64_t new_size);
 
 private:

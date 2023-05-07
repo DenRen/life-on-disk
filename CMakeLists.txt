@@ -34,3 +34,13 @@ target_link_libraries(
 
 include(GoogleTest)
 gtest_discover_tests(dna_test)
+
+# Utilites
+
+add_executable(
+    convert_text_dna
+    utilits/convert_text_dna.cpp
+    ${SRC}
+    ${DNA_SRC}
+)
+

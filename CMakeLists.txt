@@ -44,3 +44,10 @@ add_executable(
     ${DNA_SRC}
 )
 
+
+add_executable(
+    comp_to_suff_arr
+    utilits/comp_to_suff_arr.cpp
+    ${SRC}
+    ${DNA_SRC}
+)

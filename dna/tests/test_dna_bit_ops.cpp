@@ -48,11 +48,11 @@ TEST(DNA_BIT_OPS, READ) {
         std::uniform_int_distribution<uint64_t> pos_distrib{pos_min, pos_max};
         std::uniform_int_distribution<uint8_t> dna_symb_distrib{0, 5};
 
-        const unsigned num_repeats = 100;
+        const unsigned num_repeats = 10000;
         std::map<uint64_t, DnaSymb> ops;
 
         for (unsigned i_repeat = 0; i_repeat < num_repeats; ++i_repeat) {
-            for (unsigned i = 0; i < 1000; ++i) {
+            for (unsigned i = 0; i < buf.size(); ++i) {
                 uint64_t dna_pos = pos_distrib(gen);
                 DnaSymb dna_symb{dna_symb_distrib(gen)};
 

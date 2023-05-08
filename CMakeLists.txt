@@ -6,25 +6,37 @@ project(main VERSION 0.1.0)
 
 # set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -g3 -O0")
 
-file(GLOB sources main.cpp src/*.cpp src/*.h)
-add_executable(main ${sources})
+file(GLOB COMMON_SRC common/*.cpp common/*.h)
 
-set(CPACK_PROJECT_NAME ${PROJECT_NAME})
-set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+# Text main
+file(GLOB TEXT_SRC text/*.cpp text/*.h)
+
+add_executable(text_main
+    text_main.cpp
+    ${TEXT_SRC}
+    ${COMMON_SRC}
+)
+
+# Dna main
+file(GLOB DNA_SRC dna/*.cpp dna/*.h)
+
+# add_executable(dna_main
+#     text_main.cpp
+#     ${DNA_SRC}
+#     ${COMMON_SRC}
+# )
 
 # DNA Tests
 enable_testing()
 
 find_package(GTest REQUIRED)
 
-file(GLOB SRC src/*.cpp src/*.h)
-file(GLOB DNA_SRC dna/*.cpp dna/*.h)
 file(GLOB DNA_TEST_SRC dna/tests/*.cpp)
 
 add_executable(
     dna_test
-    ${SRC}
     ${DNA_SRC}
+    ${COMMON_SRC}
     ${DNA_TEST_SRC}
 )
 target_link_libraries(
@@ -42,12 +54,13 @@ add_executable(
     utilits/convert_text_dna.cpp
     ${SRC}
     ${DNA_SRC}
+    ${COMMON_SRC}
 )
-
 
 add_executable(
     comp_to_suff_arr
     utilits/comp_to_suff_arr.cpp
     ${SRC}
     ${DNA_SRC}
+    ${COMMON_SRC}
 )

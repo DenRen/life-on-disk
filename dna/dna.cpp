@@ -1,7 +1,9 @@
 #include "dna.h"
+#include "../common/help_func.h"
 
 #include <algorithm>
 #include <limits>
+#include <execution>
 
 std::pair<DnaSymb, bool> ConvertTextDnaSymb2DnaSymb(u8 symb) noexcept {
     bool is_dna_symb = true;
@@ -148,23 +150,22 @@ ObjectFileHolder BuildCompressedDnaFromTextDna(std::string_view text_dna_path,
     return {compressed_dna_path};
 }
 
-DnaDataAccessor::DnaDataAccessor(const u8* dna_data_begin, uint64_t num_dna) noexcept
+DnaDataAccessor::DnaDataAccessor(const u8* dna_data_begin, uint64_t num_dna)
     : m_dna_data_begin{dna_data_begin}
-    , m_num_dna{num_dna} {}
+    , m_num_dna{num_dna} {
+    if (m_num_dna == 0 || (*this)[m_num_dna - 1] != DnaSymb::TERM) {
+        throw std::invalid_argument{"Dna data must end TERM symbol"};
+    }
+}
 
 DnaSymb DnaDataAccessor::operator[](uint64_t index) const noexcept {
     return ReadDnaSymb(m_dna_data_begin, index);
 }
 
-
-#if 1
-
 struct suffix {
     uint32_t index;
     int rank[2];
 };
-
-#include <execution>
 
 ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna_path,
                                                  std::string_view suff_arr_path) {
@@ -232,127 +233,16 @@ ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna
     return {suff_arr_path};
 }
 
-#elif 1
+DnaBuffer::DnaBuffer(std::string_view dna_str) {
+    m_dna_buf.resize(DivUp(dna_str.size() * c_dna_symb_size, 8));
+    uint8_t* dest_data_begin = m_dna_buf.data();
 
-#include <string.h>
-
-ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna_path,
-                                                 std::string_view suff_arr_path) {
-    ObjectFileHolder dna_file_holder{compressed_dna_path};
-    DnaDataAccessor dna{dna_file_holder.cbegin(), dna_file_holder.Size()};
-
-    using sa_index_t = uint32_t;
-
-    if (dna.Size() > std::numeric_limits<sa_index_t>::max()) {
-        throw std::runtime_error{"Too big dna size for build SA"};
-    }
-
-    const sa_index_t n = (sa_index_t)dna.Size();
-    const sa_index_t alphabet = 256;
-
-    std::vector<int> p(n), cnt(n), c(n);
-    memset(cnt.data(), 0, alphabet * sizeof(int));
-    for (int i = 0; i < n; ++i) {
-        ++cnt[(u8)dna[i]];
-    }
-    for (int i = 1; i < alphabet; ++i) {
-        cnt[i] += cnt[i - 1];
-    }
-    for (int i = 0; i < n; ++i) {
-        p[--cnt[(u8)dna[i]]] = i;
-    }
-    c[p[0]] = 0;
-    int classes = 1;
-    for (int i = 1; i < n; ++i) {
-        if (dna[p[i]] != dna[p[i - 1]])
-            ++classes;
-        c[p[i]] = classes - 1;
-    }
-
-    std::vector<int> pn(n), cn(n);
-    for (int h = 0; (1 << h) < n; ++h) {
-        for (int i = 0; i < n; ++i) {
-            pn[i] = p[i] - (1 << h);
-            if (pn[i] < 0)
-                pn[i] += n;
+    for (uint32_t i = 0; i < dna_str.size(); ++i) {
+        auto [dna_symb, is_dna_symb] = ConvertTextDnaSymb2DnaSymb(dna_str[i]);
+        if (!is_dna_symb) {
+            throw std::invalid_argument{"DNA string have invalid symbol"};
         }
-        memset(cnt.data(), 0, classes * sizeof(int));
-        for (int i = 0; i < n; ++i) {
-            ++cnt[c[pn[i]]];
-        }
-        for (int i = 1; i < classes; ++i) {
-            cnt[i] += cnt[i - 1];
-        }
-        for (int i = n - 1; i >= 0; --i) {
-            p[--cnt[c[pn[i]]]] = pn[i];
-        }
-        cn[p[0]] = 0;
-        classes = 1;
-        for (int i = 1; i < n; ++i) {
-            int mid1 = (p[i] + (1 << h)) % n, mid2 = (p[i - 1] + (1 << h)) % n;
-            if (c[p[i]] != c[p[i - 1]] || c[mid1] != c[mid2])
-                ++classes;
-            cn[p[i]] = classes - 1;
-        }
-        memcpy(c.data(), cn.data(), n * sizeof(int));
+
+        InsertDnaSymb(dest_data_begin, i, dna_symb);
     }
-
-    {
-        FileMapperWrite suff_arr_mapper{suff_arr_path, sizeof(uint64_t) + sizeof(sa_index_t) * n};
-        *(uint64_t*)suff_arr_mapper.begin() = n;
-
-        sa_index_t* suffixArr = (sa_index_t*)(suff_arr_mapper.begin() + 8);
-        for (uint32_t i = 0; i < n; ++i) {
-            suffixArr[i] = p[i];
-        }
-    }
-
-    return {suff_arr_path};
 }
-
-#else
-
-ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna_path,
-                                                 std::string_view suff_arr_path) {
-    ObjectFileHolder dna_file_holder{compressed_dna_path};
-    DnaDataAccessor dna{dna_file_holder.cbegin(), dna_file_holder.Size()};
-
-    using sa_index_t = uint32_t;
-
-    if (dna.Size() > std::numeric_limits<sa_index_t>::max()) {
-        throw std::runtime_error{"Too big dna size for build SA"};
-    }
-
-    const sa_index_t n = (sa_index_t)dna.Size();
-    const sa_index_t alphabet = 6;
-
-    std::vector<sa_index_t> sa(n);
-    for (sa_index_t i = 0; i < n; ++i) {
-        sa[i] = i;
-    }
-
-    std::sort(sa.begin(), sa.end(), [n, &dna](sa_index_t lhs, sa_index_t rhs) {
-        sa_index_t len = n - std::max(lhs, rhs);
-        for (sa_index_t i = 0; i < len; ++i) {
-            if (dna[lhs + i] != dna[rhs + i]) {
-                return (u8)dna[lhs + i] < (u8)dna[rhs + i];
-            }
-        }
-
-        return false;
-    });
-
-    {
-        FileMapperWrite suff_arr_mapper{suff_arr_path, sizeof(uint64_t) + sizeof(sa_index_t) * n};
-        *(uint64_t*)suff_arr_mapper.begin() = n;
-
-        sa_index_t* suffixArr = (sa_index_t*)(suff_arr_mapper.begin() + 8);
-        for (uint32_t i = 0; i < n; ++i) {
-            suffixArr[i] = sa[i];
-        }
-    }
-
-    return {suff_arr_path};
-}
-
-#endif

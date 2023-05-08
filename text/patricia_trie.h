@@ -1,13 +1,10 @@
 #pragma once
 
-#include "file_mapper.h"
-#include "misalign.h"
+#include "types.h"
+#include "../common/file_mapper.h"
+#include "../common/help_func.h"
 
 #include <algorithm>
-#include <array>
-#include <cassert>
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 
 namespace PT {

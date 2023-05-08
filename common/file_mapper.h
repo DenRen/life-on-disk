@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common.h"
+#include "common_type.h"
 
 #include <string_view>
 #include <vector>
@@ -17,12 +17,12 @@ public:
         return {m_data, m_size};
     }
 
-    const uint8_t* begin() const noexcept {
-        return (const uint8_t*)m_data;
+    const u8* begin() const noexcept {
+        return (const u8*)m_data;
     }
 
-    const uint8_t* end() const noexcept {
-        return (const uint8_t*)m_data + m_size;
+    const u8* end() const noexcept {
+        return (const u8*)m_data + m_size;
     }
 
     uint64_t Size() const noexcept {
@@ -54,4 +54,3 @@ private:
     int m_fd;
 };
 
-std::vector<str_len_t> BuildSortedSuff(std::string_view str);

@@ -1,10 +1,8 @@
 #include "patricia_trie.h"
-#include "file_mapper.h"
-#include "misalign.h"
 
+#include <cassert>
 #include <variant>
 #include <map>
-#include <stack>
 #include <stdexcept>
 #include <fstream>
 #include <iostream>

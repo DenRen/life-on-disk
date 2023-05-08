@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <string>
 
-#include "../src/file_mapper.h"
+#include "../common/file_mapper.h"
 #include "../dna/dna.h"
 
 int main(int argc, char* argv[]) {

@@ -105,19 +105,3 @@ void FileMapperWrite::Truncate(uint64_t new_size) {
     m_size = new_size;
     m_data = (u8*)MapFile(m_fd, m_size, PROT_WRITE, MAP_SHARED);
 }
-
-std::vector<str_pos_t> BuildSortedSuff(std::string_view str) {
-    std::vector<str_pos_t> suff;
-    suff.resize(str.size());
-    for (str_pos_t pos = 0; pos < suff.size(); ++pos) {
-        suff[pos] = pos;
-    }
-
-    std::sort(std::begin(suff), std::end(suff), [&str](auto lhs, auto rhs) noexcept {
-        std::string_view lhs_sv{str.data() + lhs, str.size() - lhs};
-        std::string_view rhs_sv{str.data() + rhs, str.size() - rhs};
-        return lhs_sv < rhs_sv;
-    });
-
-    return suff;
-}

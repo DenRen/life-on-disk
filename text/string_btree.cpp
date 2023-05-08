@@ -1,16 +1,10 @@
 #include "string_btree.h"
-#include "misalign.h"
 
 #include <limits>
 #include <stdexcept>
 #include <iostream>
 
 namespace SBT {
-
-template <typename T, typename U>
-auto DivUp(T value, U dvider) noexcept {
-    return value / dvider + !!(value % dvider);
-}
 
 blk_pos_t CalcCommonNumBlock(str_len_t num_string) {
     // Spec case

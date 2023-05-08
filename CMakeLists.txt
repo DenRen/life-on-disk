@@ -4,7 +4,7 @@ project(main VERSION 0.1.0)
 # include(CTest)
 # enable_testing()
 
-# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -g3 -O0")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -g3 -O0")
 
 file(GLOB COMMON_SRC common/*.cpp common/*.h)
 
@@ -20,11 +20,11 @@ add_executable(text_main
 # Dna main
 file(GLOB DNA_SRC dna/*.cpp dna/*.h)
 
-# add_executable(dna_main
-#     text_main.cpp
-#     ${DNA_SRC}
-#     ${COMMON_SRC}
-# )
+add_executable(dna_main
+    dna_main.cpp
+    ${DNA_SRC}
+    ${COMMON_SRC}
+)
 
 # DNA Tests
 enable_testing()

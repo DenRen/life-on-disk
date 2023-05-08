@@ -152,11 +152,10 @@ ObjectFileHolder BuildCompressedDnaFromTextDna(std::string_view text_dna_path,
 
 DnaDataAccessor::DnaDataAccessor(const u8* dna_data_begin, uint64_t num_dna)
     : m_dna_data_begin{dna_data_begin}
-    , m_num_dna{num_dna} {
-    if (m_num_dna == 0 || (*this)[m_num_dna - 1] != DnaSymb::TERM) {
-        throw std::invalid_argument{"Dna data must end TERM symbol"};
-    }
-}
+    , m_num_dna{num_dna} {}
+
+DnaDataAccessor::DnaDataAccessor(const ObjectFileHolder& dna_file_holder)
+    : DnaDataAccessor{dna_file_holder.cbegin(), dna_file_holder.Size()} {}
 
 DnaSymb DnaDataAccessor::operator[](uint64_t index) const noexcept {
     return ReadDnaSymb(m_dna_data_begin, index);
@@ -233,8 +232,9 @@ ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna
     return {suff_arr_path};
 }
 
-DnaBuffer::DnaBuffer(std::string_view dna_str) {
-    m_dna_buf.resize(DivUp(dna_str.size() * c_dna_symb_size, 8));
+DnaBuffer::DnaBuffer(std::string_view dna_str)
+    : m_num_dna{dna_str.size()} {
+    m_dna_buf.resize(DivUp(m_num_dna * c_dna_symb_size, 8));
     uint8_t* dest_data_begin = m_dna_buf.data();
 
     for (uint32_t i = 0; i < dna_str.size(); ++i) {

@@ -5,8 +5,8 @@
 #include <iostream>
 
 #include "../common/file_mapper.h"
+#include "types.h"
 
-enum class DnaSymb : uint8_t { TERM = 0, A, C, T, G, N };
 inline bool operator<(DnaSymb lhs, DnaSymb rhs) noexcept {
     return (u8)lhs < (u8)rhs;
 }
@@ -44,14 +44,19 @@ ObjectFileHolder BuildCompressedDnaFromTextDna(std::string_view text_dna_path,
 ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna_path,
                                                  std::string_view suff_arr_path);
 
-// Garantee, that [Size() - 1] == TERM
+// Not garantee, that [Size() - 1] == TERM
 class DnaDataAccessor {
 public:
     DnaDataAccessor(const u8* dna_data_begin, uint64_t num_dna);
+    DnaDataAccessor(const ObjectFileHolder& dna_file_holder);
 
     DnaSymb operator[](uint64_t index) const noexcept;
     uint64_t Size() const noexcept {
         return m_num_dna;
+    }
+
+    uint64_t StrSize(uint64_t index) const noexcept {
+        return Size() - index;
     }
 
 private:

@@ -21,19 +21,22 @@ int main() try {
     std::string dna_data_path = data_dir + "dna." + data_size + ".comp";
     // std::string dna_data_path = data_dir + "micro.comp";
     std::string dna_data_sa_path = dna_data_path + ".sa";
+    std::string sbt_bin_path = btree_name + '.' + data_size;
 
     std::cout << "DNA: " << dna_data_path << std::endl;
     std::cout << "SA:  " << dna_data_sa_path << "\n\n";
 
-// #define CACHE_SBT
+#define CACHE_SBT
+
+    using SbtT = DNA_SBT::StringBTree<DnaSymb>;
 
 #ifndef CACHE_SBT
     std::cout << "SBT building started\n";
-    auto sbt = DNA_SBT::StringBTree::Build(btree_name, dna_data_path, dna_data_sa_path);
+    auto sbt = SbtT::Build<DnaDataAccessor>(sbt_bin_path, dna_data_path, dna_data_sa_path);
     // sbt.Dump();
     std::cout << "SBT building finished\n";
 #else
-    DNA_SBT::StringBTree sbt{btree_name, dna_data_path};
+    SbtT sbt{sbt_bin_path, dna_data_path};
     std::cout << "SBT loaded\n";
 #endif
 
@@ -71,8 +74,11 @@ int main() try {
             std::cout << "len: " << answer_len << ", sa pos: " << sa_pos << std::endl;
 
             str_pos_t str_pos_from_sa = suff_arr[sa_pos];
-            std::cout << pos << " == " << str_pos_from_sa << " -> " << std::boolalpha
-                      << (pos == str_pos_from_sa) << std::endl;
+            if (pos != str_pos_from_sa) {
+                std::cout << pos << " == " << str_pos_from_sa << " -> " << std::boolalpha
+                          << (pos == str_pos_from_sa) << std::endl;
+                throw std::runtime_error{"Incorrect SA index!"};
+            }
         } else {
             std::cout << "not found" << std::endl;
         }

@@ -42,6 +42,8 @@ PACKED_STRUCT NodeBase {
     enum class Type : u8 { Inner, Leaf };
     Type type;
 
+    str_pos_t suff_arr_left_size;
+
     NodeBase(Type type)
         : type{type} {}
 
@@ -94,18 +96,19 @@ void DumpExt(const NodeBase* node_base);
 class StringBTree {
 public:
     StringBTree(std::string sbt_path, std::string dna_data_path);
-    ~StringBTree() {}
 
     static StringBTree Build(std::string sbt_dest_path, std::string dna_data_path,
                              std::string dna_data_sa_path);
 
-    std::pair<str_pos_t, bool> Search(DnaDataAccessor pattern);
+    // dna pos, sa pos, is find
+    std::tuple<str_pos_t, str_pos_t, bool> Search(DnaDataAccessor pattern);
 
     void Dump();
 
 private:
     void DumpImpl(const NodeBase* node_base, int depth);
     const NodeBase* GetNodeBase(blk_pos_t blk_pos) const noexcept;
+    str_pos_t GetSAPos(const NodeBase* node, in_blk_pos_t ext_pos);
 
 private:
     FileMapperRead m_btree;
@@ -117,6 +120,7 @@ private:
     // Cache
     str_pos_t m_leftmost_str;
     str_pos_t m_rightmost_str;
+    const LeafNode* m_leftmost_leaf;
 };
 
 }  // namespace DNA_SBT

@@ -276,8 +276,8 @@ void BuildAndEmplacePT(DnaDataAccessor dna,
         // std::cout << "ins: \"" << str << "\"\n";
     }
 
-    static int ctr = 0;
-    std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
+    // static int ctr = 0;
+    // std::ofstream{"Native" + std::to_string(ctr++) + ".dot"} << pt.DrawTrie();
 
     pt.EmplaceOn(dest, dest_size);
 }
@@ -357,7 +357,7 @@ SearchResult Search(DnaDataAccessor pattern, const InnerNode* root, str_len_t la
 
     // Second phase
     if (hit_node_pos < ext_pos_begin) {  // Hit node is not leaf
-        char_t pat_symb = pattern[lcp];
+        char_t pat_symb = lcp < pattern.Size() ? pattern[lcp] : char_t::TERM;
         char_t text_symb = dna[str_pos + lcp];
         node = pt.GetNode(hit_node_pos);
         const Branch* branchs_begin = node->GetBranchs();

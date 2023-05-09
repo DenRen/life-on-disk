@@ -13,7 +13,7 @@ int main() try {
 
     std::string btree_name = "dna_btree.bin";
     const std::string data_dir = "../../data/T_SA/";
-    const char* data_size_arr[] = {"1Kb", "1Mb", "200MB"};
+    const char* data_size_arr[] = {"1Kb", "1Mb", "20MB", "100MB", "200MB"};
 
     const str_len_t max_print_len = 25;
 
@@ -40,6 +40,9 @@ int main() try {
     ObjectFileHolder dna_file_holder{dna_data_path};
     DnaDataAccessor dna_data{dna_file_holder};
 
+    ObjectFileHolder suff_arr_holder{dna_data_sa_path};
+    const str_pos_t* suff_arr = (const str_pos_t*)suff_arr_holder.cbegin();
+
     while (true) {
         std::string str;
         std::getline(std::cin, str);
@@ -49,8 +52,8 @@ int main() try {
 
         DnaBuffer dna_buf{str};
         DnaDataAccessor pattern = dna_buf.GetAccessor();
-        
-        auto [pos, is_finded] = sbt.Search(pattern);
+
+        auto [pos, sa_pos, is_finded] = sbt.Search(pattern);
         if (is_finded) {
             str_len_t answer_len = dna_data.Size() - pos;
             str_len_t len = std::min(answer_len, max_print_len);
@@ -65,8 +68,11 @@ int main() try {
             }
 
             std::cout << "`" << std::endl;
+            std::cout << "len: " << answer_len << ", sa pos: " << sa_pos << std::endl;
 
-            std::cout << "len: " << answer_len << std::endl;
+            str_pos_t str_pos_from_sa = suff_arr[sa_pos];
+            std::cout << pos << " == " << str_pos_from_sa << " -> " << std::boolalpha
+                      << (pos == str_pos_from_sa) << std::endl;
         } else {
             std::cout << "not found" << std::endl;
         }

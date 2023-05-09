@@ -58,6 +58,7 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string dna_data_p
 
     str_pos_t i_str_begin = 0;
     std::vector<InnerNode::ExtItemT> exts(num_leaf_node);
+    str_pos_t suff_arr_left_size_prev = 0;
     for (blk_pos_t i_node_leaf = 0; i_node_leaf < num_leaf_node; ++i_node_leaf) {
         LeafNode* node = new (cur_dest) LeafNode;
         cur_dest = (u8*)node + g_block_size;
@@ -79,6 +80,9 @@ StringBTree StringBTree::Build(std::string sbt_dest_path, std::string dna_data_p
         i_str_begin += node_num_str;
 
         DNA_PT::BuildAndEmplacePT(dna_data, strs, addr_begin, sizeof(node->PT));
+
+        node->suff_arr_left_size = suff_arr_left_size_prev;
+        suff_arr_left_size_prev += node_num_str;
 
         if (num_leaf_node > 1) {
             exts[i_node_leaf] = {ext_poss[0].str_pos, ext_poss[node_num_str - 1].str_pos,
@@ -171,6 +175,15 @@ StringBTree::StringBTree(std::string sbt_path, std::string dna_data_path)
 
     m_leftmost_str = pt.GetLeftmostStr();
     m_rightmost_str = pt.GetRightmostStr();
+
+    // Init leftmost leaf
+    const NodeBase* node_base = (const NodeBase*)m_root;
+    while (node_base->IsInner()) {
+        const InnerNode* inn_node = (const InnerNode*)node_base;
+        blk_pos_t leftmost_child_pos = inn_node->ExtBegin()->child;
+        node_base = GetNodeBase(leftmost_child_pos);
+    }
+    m_leftmost_leaf = (const LeafNode*)node_base;
 }
 
 static void print_shift(int depth) {
@@ -240,7 +253,7 @@ const NodeBase* StringBTree::GetNodeBase(blk_pos_t blk_pos) const noexcept {
     return (const NodeBase*)((const u8*)m_btree.GetData().data() + blk_pos * g_block_size);
 }
 
-std::pair<str_pos_t, bool> StringBTree::Search(DnaDataAccessor pattern) {
+std::tuple<str_pos_t, str_pos_t, bool> StringBTree::Search(DnaDataAccessor pattern) {
     {
         // pattern <= m_leftmost_str
         str_len_t len = std::min(pattern.Size(), m_dna.StrSize(m_leftmost_str));
@@ -250,13 +263,13 @@ std::pair<str_pos_t, bool> StringBTree::Search(DnaDataAccessor pattern) {
             char_t left_symb = m_dna[m_leftmost_str + i];
             if (patt_symb != left_symb) {
                 if (patt_symb < left_symb) {
-                    return {m_leftmost_str, true};
+                    return {m_leftmost_str, 0, true};
                 }
                 break;
             }
         }
         if (i == len) {
-            return {m_leftmost_str, true};
+            return {m_leftmost_str, 0, true};
         }
     }
 
@@ -269,7 +282,8 @@ std::pair<str_pos_t, bool> StringBTree::Search(DnaDataAccessor pattern) {
             char_t right_symb = m_dna[m_rightmost_str + i];
             if (patt_symb != right_symb) {
                 if (patt_symb > right_symb) {
-                    return {m_rightmost_str, true};
+                    str_pos_t sa_pos = m_dna.Size() - 1;
+                    return {m_rightmost_str, sa_pos, true};
                 }
                 break;
             }
@@ -278,6 +292,7 @@ std::pair<str_pos_t, bool> StringBTree::Search(DnaDataAccessor pattern) {
 
     str_pos_t str_pos = 0;
     str_len_t cur_lcp = 0;
+    in_blk_pos_t ext_pos_res = 0;
     const NodeBase* sbt_node_base = (const NodeBase*)m_root;
     while (true) {
         DNA_PT::Wrapper pt = GetPT(sbt_node_base);
@@ -301,6 +316,7 @@ std::pair<str_pos_t, bool> StringBTree::Search(DnaDataAccessor pattern) {
             if (local_ext_pos == 0) {
                 // L
                 str_pos = pt.GetStr(ext_pos);
+                ext_pos_res = ext_pos;
                 break;
             } else if (local_ext_pos == sizeof(str_pos_t)) {
                 // R
@@ -310,11 +326,13 @@ std::pair<str_pos_t, bool> StringBTree::Search(DnaDataAccessor pattern) {
             }
         } else {
             str_pos = pt.GetStr(ext_pos);
+            ext_pos_res = ext_pos;
             break;
         }
     }
 
-    return {str_pos, cur_lcp >= pattern.Size()};
+    str_pos_t sa_pos = GetSAPos(sbt_node_base, ext_pos_res);
+    return {str_pos, sa_pos, cur_lcp >= pattern.Size()};
 }
 
 void DumpExt(const NodeBase* node_base) {
@@ -339,6 +357,16 @@ void DumpExt(const NodeBase* node_base) {
             std::cout << ext_it->str_pos;
         }
     }
+}
+
+str_pos_t StringBTree::GetSAPos(const NodeBase* node, in_blk_pos_t ext_pos) {
+    const auto global_sa_pos = node->suff_arr_left_size;
+
+    const LeafNode* leaf_node = (const LeafNode*)node;
+    const auto local_sa_pos =
+        (ext_pos - leaf_node->GetExtPosBegin()) / sizeof(LeafNode::ExtItemT::str_pos);
+
+    return global_sa_pos + local_sa_pos;
 }
 
 DNA_PT::Wrapper GetPT(const NodeBase* node_base) noexcept {

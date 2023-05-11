@@ -7,8 +7,8 @@
 #include <algorithm>
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        printf("Please, enter path to file with compressed DNA data\n");
+    if (argc != 3) {
+        printf("Please, enter path to file with compressed DNA data and blocking parameter d\n");
         return 0;
     }
 
@@ -20,10 +20,21 @@ int main(int argc, char* argv[]) {
         printf("Incorrect path: \'%s\'\n", comp_dna_path.data());
     }
 
+    uint d = 0;
+    if (sscanf(argv[2], "%u", &d) != 1) {
+        throw std::invalid_argument{"Incorrect blockung parameter"};
+    }
+
     std::string suff_arr_path = std::string{comp_dna_path} + ".sa";
 
+    if (d > 1) {
+        suff_arr_path += ".d" + std::to_string(d);
+    }
+
+    std::cout << "SA path: " << suff_arr_path << std::endl;
+
     std::cout << "SA building started" << std::endl;
-    auto dna_sa_file_holder = BuildSuffArrayFromCompressedDna(comp_dna_path, suff_arr_path);
+    auto dna_sa_file_holder = BuildSuffArrayFromCompressedDna(comp_dna_path, suff_arr_path, d);
     const uint32_t* sa = (const uint32_t*)dna_sa_file_holder.cbegin();
     const uint32_t sa_size = dna_sa_file_holder.Size();
     std::cout << "SA building finished" << std::endl;
@@ -60,10 +71,10 @@ int main(int argc, char* argv[]) {
     }
 #else
     for (uint32_t i_sa = 0; i_sa + 1 < sa_size; ++i_sa) {
-        uint32_t lhs_begin = sa[i_sa];
-        uint32_t rhs_begin = sa[i_sa + 1];
+        uint32_t lhs_begin = d * sa[i_sa];
+        uint32_t rhs_begin = d * sa[i_sa + 1];
 
-        uint32_t len = sa_size - std::max(lhs_begin, rhs_begin);
+        uint32_t len = d * sa_size - std::max(lhs_begin, rhs_begin);
         for (uint32_t i = 0; i < len; ++i) {
             auto lhs_symb = dna[lhs_begin + i];
             auto rhs_symb = dna[rhs_begin + i];

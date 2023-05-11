@@ -17,7 +17,7 @@ int main() try {
 
     const str_len_t max_print_len = 25;
 
-    const char* data_size = data_size_arr[2];
+    const char* data_size = data_size_arr[1];
     std::string dna_data_path = data_dir + "dna." + data_size + ".comp";
     // std::string dna_data_path = data_dir + "micro.comp";
     std::string dna_data_sa_path = dna_data_path + ".sa";
@@ -26,22 +26,21 @@ int main() try {
     std::cout << "DNA: " << dna_data_path << std::endl;
     std::cout << "SA:  " << dna_data_sa_path << "\n\n";
 
-#define CACHE_SBT
-
     using SbtT = DNA_SBT::StringBTree<DnaSymb>;
 
+    ObjectFileHolder dna_file_holder{dna_data_path};
+    DnaDataAccessor dna_data{dna_file_holder};
+
+// #define CACHE_SBT
 #ifndef CACHE_SBT
     std::cout << "SBT building started\n";
-    auto sbt = SbtT::Build<DnaDataAccessor>(sbt_bin_path, dna_data_path, dna_data_sa_path);
+    auto sbt = SbtT::Build(sbt_bin_path, dna_data, dna_data_sa_path);
     // sbt.Dump();
     std::cout << "SBT building finished\n";
 #else
     SbtT sbt{sbt_bin_path, dna_data_path};
     std::cout << "SBT loaded\n";
 #endif
-
-    ObjectFileHolder dna_file_holder{dna_data_path};
-    DnaDataAccessor dna_data{dna_file_holder};
 
     ObjectFileHolder suff_arr_holder{dna_data_sa_path};
     const str_pos_t* suff_arr = (const str_pos_t*)suff_arr_holder.cbegin();
@@ -56,7 +55,7 @@ int main() try {
         DnaBuffer dna_buf{str};
         DnaDataAccessor pattern = dna_buf.GetAccessor();
 
-        auto [pos, sa_pos, is_finded] = sbt.Search(pattern);
+        auto [pos, sa_pos, is_finded] = sbt.Search(pattern, dna_data);
         if (is_finded) {
             str_len_t answer_len = dna_data.Size() - pos;
             str_len_t len = std::min(answer_len, max_print_len);

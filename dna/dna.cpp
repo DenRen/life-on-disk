@@ -29,25 +29,22 @@ std::pair<DnaSymb, bool> ConvertTextDnaSymb2DnaSymb(u8 symb) noexcept {
     return {convert(), is_dna_symb};
 }
 
-constexpr u8 c_dna_symb_size = 3;
-static_assert(c_dna_symb_size <= 8);
-
 void InsertDnaSymb(u8* begin, uint64_t dna_pos, DnaSymb dna_symb_) {
     const u8 dna_symb = (u8)dna_symb_;
 
-    uint64_t bit_pos = c_dna_symb_size * dna_pos;
+    uint64_t bit_pos = DnaSymbBitSize * dna_pos;
     u8* data = begin + bit_pos / 8;
 
     uint64_t local_bit_pos = bit_pos % 8;
-    if (local_bit_pos <= 8 - c_dna_symb_size) {
-        u8 ones = (1u << c_dna_symb_size) - 1u;
-        u8 lshift = 8 - c_dna_symb_size - local_bit_pos;
+    if (local_bit_pos <= 8 - DnaSymbBitSize) {
+        u8 ones = (1u << DnaSymbBitSize) - 1u;
+        u8 lshift = 8 - DnaSymbBitSize - local_bit_pos;
         u8 mask = ones << lshift;
 
         *data = (*data & ~mask) | (dna_symb << lshift);
     } else {
         u8 l_size = 8 - local_bit_pos;
-        u8 r_size = c_dna_symb_size - l_size;
+        u8 r_size = DnaSymbBitSize - l_size;
 
         u8 l_mask = (1u << l_size) - 1u;
         u8 r_mask = ((1u << r_size) - 1u) << (8 - r_size);
@@ -59,19 +56,19 @@ void InsertDnaSymb(u8* begin, uint64_t dna_pos, DnaSymb dna_symb_) {
 }
 
 DnaSymb ReadDnaSymb(const u8* begin, uint64_t dna_pos) {
-    uint64_t bit_pos = c_dna_symb_size * dna_pos;
+    uint64_t bit_pos = DnaSymbBitSize * dna_pos;
     const u8* data = begin + bit_pos / 8;
 
     uint64_t local_bit_pos = bit_pos % 8;
-    if (local_bit_pos <= 8 - c_dna_symb_size) {
-        u8 mask = (1u << c_dna_symb_size) - 1u;
-        u8 rshift = 8 - c_dna_symb_size - local_bit_pos;
+    if (local_bit_pos <= 8 - DnaSymbBitSize) {
+        u8 mask = (1u << DnaSymbBitSize) - 1u;
+        u8 rshift = 8 - DnaSymbBitSize - local_bit_pos;
 
         u8 res = (*data >> rshift) & mask;
         return DnaSymb{res};
     } else {
         u8 l_size = 8 - local_bit_pos;
-        u8 r_size = c_dna_symb_size - l_size;
+        u8 r_size = DnaSymbBitSize - l_size;
 
         u8 l_mask = (1u << l_size) - 1u;
 
@@ -111,10 +108,15 @@ ObjectFileHolder::ObjectFileHolder(std::string_view compressed_dna_path)
     , m_size{*(const uint64_t*)m_file_map.begin()} {}
 
 ObjectFileHolder BuildCompressedDnaFromTextDna(std::string_view text_dna_path,
-                                               std::string_view compressed_dna_path) {
+                                               std::string_view compressed_dna_path, uint d_max) {
+    if (d_max < 1) {
+        throw std::runtime_error{"d_max must be >= 1"};
+    }
+
     const FileMapperRead mapper_text_dna{text_dna_path};
-    FileMapperWrite mapper_comp_dna{compressed_dna_path,
-                                    ObjectFileHolder::c_header_size + mapper_text_dna.Size()};
+    FileMapperWrite mapper_comp_dna{
+        compressed_dna_path,
+        ObjectFileHolder::c_header_size + mapper_text_dna.Size() + DivUp(d_max, DnaSymbBitSize)};
 
     u8* const dna_begin = mapper_comp_dna.begin() + ObjectFileHolder::c_header_size;
     uint64_t dna_pos = 0;
@@ -143,8 +145,10 @@ ObjectFileHolder BuildCompressedDnaFromTextDna(std::string_view text_dna_path,
     uint64_t* num_dna_symb = (uint64_t*)mapper_comp_dna.begin();
     *num_dna_symb = dna_pos;
 
-    uint64_t num_bits = 8 * ObjectFileHolder::c_header_size + c_dna_symb_size * dna_pos;
-    uint64_t num_bytes = num_bits / 8 + (num_bits % 8 != 0);
+    uint64_t dna_pos_with_d = d_max * DivUp(dna_pos, d_max);
+
+    uint64_t num_bits = 8 * ObjectFileHolder::c_header_size + DnaSymbBitSize * dna_pos_with_d;
+    uint64_t num_bytes = DivUp(num_bits, 8);
     mapper_comp_dna.Truncate(num_bytes);
 
     return {compressed_dna_path};
@@ -166,18 +170,47 @@ struct suffix {
     int rank[2];
 };
 
+static int DnaSymbSeq2Int(const DnaDataAccessor& dna, uint i_begin, uint d) {
+    // union {
+    //     int val;
+    //     uint8_t arr[sizeof(int)];
+    // } res;
+    // res.val = 0;
+
+    // for (uint i = 0; i < d; ++i) {
+    //     InsertDnaSymb((u8*)&res.arr, DnaSymbBitSize * i, dna[i_begin + i]);
+    // }
+
+    // for (uint i = 0; i < sizeof(res.arr) / 2; ++i) {
+    //     // std::swap(res.arr[i], res.arr[sizeof(res.arr) - 1 - i]);
+    // }
+
+    // return res.val;
+
+    uint res = 0;
+    for (uint i = 0; i < d; ++i) {
+        res += ((uint)dna[i_begin + i]) << (DnaSymbBitSize * (d - 1 - i));
+    }
+    return res;
+}
+
 ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna_path,
-                                                 std::string_view suff_arr_path) {
+                                                 std::string_view suff_arr_path, uint d) {
+    if (d < 1) {
+        throw std::runtime_error{"d_max must be >= 1"};
+    }
+
     ObjectFileHolder dna_file_holder{compressed_dna_path};
     DnaDataAccessor dna{dna_file_holder.cbegin(), dna_file_holder.Size()};
 
     using sa_index_t = uint32_t;
 
-    if (dna.Size() > std::numeric_limits<sa_index_t>::max()) {
+    auto num_items = dna.Size() / d;
+    if (num_items > std::numeric_limits<sa_index_t>::max()) {
         throw std::runtime_error{"Too big dna size for build SA"};
     }
 
-    const sa_index_t n = (sa_index_t)dna.Size();
+    const sa_index_t n = (sa_index_t)num_items;
 
     auto cmp = [](const suffix& a, const suffix& b) {
         return (a.rank[0] == b.rank[0]) ? (a.rank[1] < b.rank[1]) : (a.rank[0] < b.rank[0]);
@@ -186,8 +219,8 @@ ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna
     std::vector<suffix> suffixes(n);
     for (sa_index_t i = 0; i < n; i++) {
         suffixes[i].index = i;
-        suffixes[i].rank[0] = (int)dna[i];
-        suffixes[i].rank[1] = ((i + 1) < n) ? ((int)dna[i + 1]) : -1;
+        suffixes[i].rank[0] = DnaSymbSeq2Int(dna, d * i, d);
+        suffixes[i].rank[1] = ((i + 1) < n) ? DnaSymbSeq2Int(dna, d * (i + 1), d) : -1;
     }
 
     std::sort(std::execution::par_unseq, suffixes.begin(), suffixes.end(), cmp);
@@ -234,7 +267,7 @@ ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna
 
 DnaBuffer::DnaBuffer(std::string_view dna_str)
     : m_num_dna{dna_str.size()} {
-    m_dna_buf.resize(DivUp(m_num_dna * c_dna_symb_size, 8));
+    m_dna_buf.resize(DivUp(m_num_dna * DnaSymbBitSize, 8));
     uint8_t* dest_data_begin = m_dna_buf.data();
 
     for (uint32_t i = 0; i < dna_str.size(); ++i) {

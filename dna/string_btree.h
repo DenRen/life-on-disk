@@ -105,15 +105,16 @@ class StringBTree {
     void DumpExt(const NodeBase* node_base);
 
 public:
-    StringBTree(std::string sbt_path, std::string dna_data_path);
+    StringBTree(std::string sbt_path);
 
     template <typename AccessorT>
-    static StringBTree Build(std::string sbt_dest_path, std::string dna_data_path,
+    static StringBTree Build(std::string sbt_dest_path, const AccessorT& dna_data,
                              std::string dna_data_sa_path);
 
     // dna pos, sa pos, is find
     template <typename AccessorT>
-    std::tuple<str_pos_t, str_pos_t, bool> Search(const AccessorT& pattern);
+    std::tuple<str_pos_t, str_pos_t, bool> Search(const AccessorT& pattern,
+                                                  const AccessorT& dna_data);
 
     void Dump() {
         DumpImpl((const NodeBase*)m_root, 0);
@@ -131,9 +132,6 @@ private:
 private:
     FileMapperRead m_btree;
     const u8* m_root;
-
-    ObjectFileHolder m_dna_data_holder;
-    DnaDataAccessor m_dna;
 
     // Cache
     str_pos_t m_leftmost_str;
@@ -165,17 +163,13 @@ blk_pos_t StringBTree<CharT>::CalcCommonNumBlock(str_len_t num_string) {
 template <typename CharT>
 template <typename AccessorT>
 StringBTree<CharT> StringBTree<CharT>::StringBTree::Build(std::string sbt_dest_path,
-                                                          std::string dna_data_path,
+                                                          const AccessorT& dna_data,
                                                           std::string dna_data_sa_path) {
-    ObjectFileHolder dna_data_holder{dna_data_path};
-    DnaDataAccessor dna_data{
-        dna_data_holder};  // TODO: FIX (std::string dna_data_path -> dna accessor)
-
     ObjectFileHolder suff_arr_holder{dna_data_sa_path};
     const str_pos_t* suff_arr = (const str_pos_t*)suff_arr_holder.cbegin();
     const str_len_t suff_arr_size = suff_arr_holder.Size();
 
-    if (dna_data_holder.Size() != suff_arr_size) {
+    if (dna_data.Size() != suff_arr_size) {
         throw std::runtime_error("Invalid size text and suffix array");
     }
 
@@ -230,7 +224,7 @@ StringBTree<CharT> StringBTree<CharT>::StringBTree::Build(std::string sbt_dest_p
     }
 
     if (num_leaf_node == 1) {
-        return {sbt_dest_path, dna_data_path};
+        return {sbt_dest_path};
     }
 
     str_pos_t prev_layer_num_node = num_leaf_node;
@@ -287,14 +281,12 @@ StringBTree<CharT> StringBTree<CharT>::StringBTree::Build(std::string sbt_dest_p
         prev_layer_num_node = layer_num_node;
     }
 
-    return {sbt_dest_path, dna_data_path};
+    return {sbt_dest_path};
 }
 
 template <typename CharT>
-StringBTree<CharT>::StringBTree(std::string sbt_path, std::string dna_data_path)
-    : m_btree{sbt_path}
-    , m_dna_data_holder{dna_data_path}
-    , m_dna{m_dna_data_holder} {
+StringBTree<CharT>::StringBTree(std::string sbt_path)
+    : m_btree{sbt_path} {
     auto sv_btree = m_btree.GetData();
     const auto btree_num_blocks = sv_btree.size() / g_block_size;
 
@@ -380,14 +372,15 @@ void StringBTree<CharT>::DumpImpl(const NodeBase* node_base, int depth) {
 
 template <typename CharT>
 template <typename AccessorT>
-std::tuple<str_pos_t, str_pos_t, bool> StringBTree<CharT>::Search(const AccessorT& pattern) {
+std::tuple<str_pos_t, str_pos_t, bool> StringBTree<CharT>::Search(const AccessorT& pattern,
+                                                                  const AccessorT& dna) {
     {
         // pattern <= m_leftmost_str
-        str_len_t len = std::min(pattern.Size(), m_dna.StrSize(m_leftmost_str));
+        str_len_t len = std::min(pattern.Size(), dna.StrSize(m_leftmost_str));
         str_pos_t i = 0;
         for (; i < len; ++i) {
             CharT patt_symb = pattern[i];
-            CharT left_symb = m_dna[m_leftmost_str + i];
+            CharT left_symb = dna[m_leftmost_str + i];
             if (patt_symb != left_symb) {
                 if (patt_symb < left_symb) {
                     return {m_leftmost_str, 0, true};
@@ -402,14 +395,14 @@ std::tuple<str_pos_t, str_pos_t, bool> StringBTree<CharT>::Search(const Accessor
 
     {
         // pattern > m_rightmost_str
-        str_len_t len = std::min(pattern.Size(), m_dna.StrSize(m_rightmost_str));
+        str_len_t len = std::min(pattern.Size(), dna.StrSize(m_rightmost_str));
         str_pos_t i = 0;
         for (; i < len; ++i) {
             CharT patt_symb = pattern[i];
-            CharT right_symb = m_dna[m_rightmost_str + i];
+            CharT right_symb = dna[m_rightmost_str + i];
             if (patt_symb != right_symb) {
                 if (patt_symb > right_symb) {
-                    str_pos_t sa_pos = m_dna.Size() - 1;
+                    str_pos_t sa_pos = dna.Size() - 1;
                     return {m_rightmost_str, sa_pos, true};
                 }
                 break;
@@ -427,7 +420,7 @@ std::tuple<str_pos_t, str_pos_t, bool> StringBTree<CharT>::Search(const Accessor
         const auto* pt_root = pt.GetRoot();
         const auto ext_begin = pt.GetExtPos();
 
-        auto [ext_pos, lcp] = PT_T::Search(pattern, pt_root, cur_lcp, ext_begin, m_dna);
+        auto [ext_pos, lcp] = PT_T::Search(pattern, pt_root, cur_lcp, ext_begin, dna);
         cur_lcp = lcp;
 
         if (sbt_node_base->IsInner()) {

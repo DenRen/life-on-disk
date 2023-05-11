@@ -30,7 +30,7 @@ private:
 static FileDescGuard OpenFile(std::string_view path, int flags) {
     int fd = open64(path.data(), flags);
     if (fd == -1) {
-        throw std::runtime_error("Failed to open file\n");
+        throw std::runtime_error("Failed to open file: " + std::string{path});
     }
     return fd;
 }
@@ -38,7 +38,7 @@ static FileDescGuard OpenFile(std::string_view path, int flags) {
 static FileDescGuard OpenFile(std::string_view path, int flags, int opts) {
     int fd = open64(path.data(), flags, opts);
     if (fd == -1) {
-        throw std::runtime_error("Failed to open file\n");
+        throw std::runtime_error("Failed to open file: " + std::string{path});
     }
     return fd;
 }

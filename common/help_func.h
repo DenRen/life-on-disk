@@ -17,6 +17,6 @@ T misalign_load(const uint8_t* data) noexcept {
 }
 
 template <typename T, typename U>
-auto DivUp(T value, U dvider) noexcept {
+constexpr auto DivUp(T value, U dvider) noexcept {
     return value / dvider + !!(value % dvider);
 }

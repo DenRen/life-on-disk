@@ -58,8 +58,8 @@ public:
     static SearchResult Search(const AccessorT& pattern, const InnerNode* root, str_len_t last_lcp,
                                in_blk_pos_t ext_pos_begin, const AccessorT& dna_text);
 
-    static const Branch* LowerBound(const Branch* begin, const Branch* end, char_t symb) noexcept {
-        return std::lower_bound(begin, end, symb, [](const Branch& lhs, char_t cur_symb) {
+    static const Branch* LowerBound(const Branch* begin, const Branch* end, CharT symb) noexcept {
+        return std::lower_bound(begin, end, symb, [](const Branch& lhs, CharT cur_symb) {
             return lhs.symb < cur_symb;
         });
     }
@@ -323,7 +323,7 @@ PatriciaTrieNaive<CharT>::SearchInsertNode(const AccessorT& dna, str_pos_t dna_p
         auto& branchs = inn_node->childs;
         auto it = branchs.find(dna[dna_pos + inn_node->len]);
         if (it == branchs.end()) {
-            return {inn_node, inn_node->len, char_t::TERM};
+            return {inn_node, inn_node->len, {}};
         } else {
             Node* child = it->second;
             LeafNode* leftmost_leaf = FindLeftmostLeaf(child);
@@ -431,7 +431,7 @@ typename PT<CharT>::SearchResult PT<CharT>::Search(const AccessorT& pattern, con
 
     // First phase
     while (true) {
-        char_t cur_symb = pattern.Size() > node->len ? pattern[node->len] : char_t::TERM;
+        CharT cur_symb = pattern.Size() > node->len ? pattern[node->len] : CharT{};
 
         const Branch* branchs_begin = node->GetBranchs();
         const Branch* branchs_end = branchs_begin + node->num_branch;
@@ -474,7 +474,7 @@ typename PT<CharT>::SearchResult PT<CharT>::Search(const AccessorT& pattern, con
             break;
         }
 
-        char_t cur_symb = pattern.Size() > node->len ? pattern[node->len] : char_t::TERM;
+        CharT cur_symb = pattern.Size() > node->len ? pattern[node->len] : CharT{};
 
         const Branch* branchs_begin = node->GetBranchs();
         const Branch* branchs_end = branchs_begin + node->num_branch;
@@ -491,8 +491,8 @@ typename PT<CharT>::SearchResult PT<CharT>::Search(const AccessorT& pattern, con
 
     // Second phase
     if (hit_node_pos < ext_pos_begin) {  // Hit node is not leaf
-        char_t pat_symb = lcp < pattern.Size() ? pattern[lcp] : char_t::TERM;
-        char_t text_symb = dna[str_pos + lcp];
+        CharT pat_symb = lcp < pattern.Size() ? pattern[lcp] : CharT{};
+        CharT text_symb = dna[str_pos + lcp];
         node = pt.GetNode(hit_node_pos);
         const Branch* branchs_begin = node->GetBranchs();
         const Branch* branchs_end = branchs_begin + node->num_branch;
@@ -517,8 +517,8 @@ typename PT<CharT>::SearchResult PT<CharT>::Search(const AccessorT& pattern, con
         if (lcp == node->len) {
             ext_pos = hit_node_pos;
         } else {
-            char_t pat_symb = pattern[lcp];
-            char_t dna_symb = dna[str_pos + lcp];
+            CharT pat_symb = pattern[lcp];
+            CharT dna_symb = dna[str_pos + lcp];
             assert(pat_symb != dna_symb);
             if (pat_symb < dna_symb) {
                 ext_pos = hit_node_pos;

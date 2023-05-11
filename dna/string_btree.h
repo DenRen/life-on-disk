@@ -388,7 +388,7 @@ std::tuple<str_pos_t, str_pos_t, bool> StringBTree<CharT>::Search(const Accessor
                 break;
             }
         }
-        if (i == len) {
+        if (i == pattern.Size()) {
             return {m_leftmost_str, 0, true};
         }
     }
@@ -452,6 +452,7 @@ std::tuple<str_pos_t, str_pos_t, bool> StringBTree<CharT>::Search(const Accessor
     }
 
     str_pos_t sa_pos = GetSAPos(sbt_node_base, ext_pos_res);
+    std::cout << cur_lcp << ", " << pattern.Size() << std::endl;
     return {str_pos, sa_pos, cur_lcp >= pattern.Size()};
 }
 

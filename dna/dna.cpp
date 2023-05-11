@@ -171,22 +171,6 @@ struct suffix {
 };
 
 static int DnaSymbSeq2Int(const DnaDataAccessor& dna, uint i_begin, uint d) {
-    // union {
-    //     int val;
-    //     uint8_t arr[sizeof(int)];
-    // } res;
-    // res.val = 0;
-
-    // for (uint i = 0; i < d; ++i) {
-    //     InsertDnaSymb((u8*)&res.arr, DnaSymbBitSize * i, dna[i_begin + i]);
-    // }
-
-    // for (uint i = 0; i < sizeof(res.arr) / 2; ++i) {
-    //     // std::swap(res.arr[i], res.arr[sizeof(res.arr) - 1 - i]);
-    // }
-
-    // return res.val;
-
     uint res = 0;
     for (uint i = 0; i < d; ++i) {
         res += ((uint)dna[i_begin + i]) << (DnaSymbBitSize * (d - 1 - i));
@@ -265,7 +249,7 @@ ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna
     return {suff_arr_path};
 }
 
-DnaBuffer::DnaBuffer(std::string_view dna_str)
+DnaBuffer::DnaBuffer(std::string dna_str)
     : m_num_dna{dna_str.size()} {
     m_dna_buf.resize(DivUp(m_num_dna * DnaSymbBitSize, 8));
     uint8_t* dest_data_begin = m_dna_buf.data();

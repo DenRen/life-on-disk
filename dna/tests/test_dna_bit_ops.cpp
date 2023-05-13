@@ -6,8 +6,7 @@
 
 #include "../dna.h"
 
-std::array<DnaSymb, 6> g_dna_symbs{DnaSymb::TERM, DnaSymb::A, DnaSymb::C,
-                                   DnaSymb::T,    DnaSymb::G, DnaSymb::N};
+std::array<DnaSymb, 6> g_dna_symbs{DnaSymb::TERM, DnaSymb::A, DnaSymb::C, DnaSymb::T, DnaSymb::G};
 
 TEST(DNA_BIT_OPS, READ) {
     for (uint shift = 0; shift <= 5; ++shift) {
@@ -18,8 +17,8 @@ TEST(DNA_BIT_OPS, READ) {
     }
 
     {
-        DnaSymb dna_symbs[]{DnaSymb::TERM, DnaSymb::A, DnaSymb::C, DnaSymb::T, DnaSymb::G,
-                            DnaSymb::N,    DnaSymb::G, DnaSymb::A, DnaSymb::N, DnaSymb::N};
+        DnaSymb dna_symbs[]{DnaSymb::TERM, DnaSymb::A, DnaSymb::C, DnaSymb::T,
+                            DnaSymb::G,    DnaSymb::G, DnaSymb::A};
 
         std::array<uint8_t, 20> buf;
         uint64_t i = 0;
@@ -60,7 +59,7 @@ TEST(DNA_BIT_OPS, READ) {
                 InsertDnaSymb(buf.data(), dna_pos, dna_symb);
             }
 
-            for (const auto[dna_pos, dna_symb] : ops) {
+            for (const auto [dna_pos, dna_symb] : ops) {
                 ASSERT_EQ(ReadDnaSymb(buf.data(), dna_pos), dna_symb);
             }
 

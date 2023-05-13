@@ -4,6 +4,8 @@
 
 #include <limits>
 
+constexpr inline bool SBT_BUILD_LOG = true;
+
 namespace DNA_SBT {
 
 template <bool IsLeaf>
@@ -210,6 +212,7 @@ StringBTree<CharT> StringBTree<CharT>::StringBTree::Build(std::string sbt_dest_p
             ext_poss[i].str_pos = suff_arr[i_str];
             strs[i] = {(str_pos_t)ext_poss[i].str_pos, (u8*)&ext_poss[i].str_pos - addr_begin};
         }
+
         i_str_begin += node_num_str;
 
         PT_T::BuildAndEmplacePT(dna_data, strs, addr_begin, sizeof(node->PT));
@@ -221,6 +224,13 @@ StringBTree<CharT> StringBTree<CharT>::StringBTree::Build(std::string sbt_dest_p
             exts[i_node_leaf] = {ext_poss[0].str_pos, ext_poss[node_num_str - 1].str_pos,
                                  i_node_leaf};
         }
+
+        if constexpr (SBT_BUILD_LOG) {
+            if (i_node_leaf % (10 * num_leaf_node / 100) == 0) {
+                double proc = 100 * double(i_node_leaf) / num_leaf_node;
+                std::cout << i_node_leaf << " / " << num_leaf_node << " -> " << proc << "%\n";
+            }
+        }
     }
 
     if (num_leaf_node == 1) {
@@ -228,6 +238,10 @@ StringBTree<CharT> StringBTree<CharT>::StringBTree::Build(std::string sbt_dest_p
     }
 
     str_pos_t prev_layer_num_node = num_leaf_node;
+
+    if constexpr (SBT_BUILD_LOG) {
+        std::cout << "Start build inner layers\n";
+    }
 
     while (true) {
         // Build inner layer

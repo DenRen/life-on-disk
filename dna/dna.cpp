@@ -17,8 +17,6 @@ std::pair<DnaSymb, bool> ConvertTextDnaSymb2DnaSymb(u8 symb) noexcept {
                 return DnaSymb::T;
             case 'G':
                 return DnaSymb::G;
-            case 'N':
-                return DnaSymb::N;
             case '\0':
                 return DnaSymb::TERM;
             default:
@@ -90,8 +88,6 @@ const char* DNASymb2String(DnaSymb dna_symb) {
             return "T";
         case DnaSymb::G:
             return "G";
-        case DnaSymb::N:
-            return "N";
         case DnaSymb::TERM:
             return "\\0";
         default:
@@ -206,11 +202,13 @@ ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna
         suffixes[i].rank[0] = DnaSymbSeq2Int(dna, d * i, d);
         suffixes[i].rank[1] = ((i + 1) < n) ? DnaSymbSeq2Int(dna, d * (i + 1), d) : -1;
     }
+    std::cout << "DnaSeq to num complete\n";
 
     std::sort(std::execution::par_unseq, suffixes.begin(), suffixes.end(), cmp);
 
     std::vector<sa_index_t> ind(n);
     for (sa_index_t k = 4; k < 2 * n; k = k * 2) {
+        std::cout << k << " / " << n << '\n';
         int rank = 0;
         int prev_rank = suffixes[0].rank[0];
         suffixes[0].rank[0] = rank;

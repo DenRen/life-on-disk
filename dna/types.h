@@ -8,7 +8,7 @@
 #include <cassert>
 #include <string.h>
 
-enum class DnaSymb : uint8_t { TERM = 0, A, C, T, G, N };
+enum class DnaSymb : uint8_t { TERM = 0, A, C, T, G };
 constexpr u8 DnaSymbBitSize = 3;
 
 void InsertDnaSymb(uint8_t* begin, uint64_t dna_pos, DnaSymb dna_symb);

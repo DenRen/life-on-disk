@@ -97,7 +97,7 @@ int main_blocking_d() {
     const std::string data_dir = "../../data/T_SA/";
     const char* data_size_arr[] = {"1Kb", "1Mb", "20MB", "100MB", "200MB"};
 
-    const str_len_t max_print_len = 25;
+    const str_len_t max_print_len = 25/2;
 
     const char* data_size = data_size_arr[4];
     std::string dna_data_path = data_dir + "dna." + data_size + ".comp";
@@ -141,9 +141,16 @@ int main_blocking_d() {
             return 0;
         }
 
-        if (str.size() % d) {
-            std::cout << "Pattern must be div " << (uint)d << std::endl;
-            continue;
+        const bool is_pattern_div_d = str.size() % d == 0;
+        if (!is_pattern_div_d) {
+            // std::cout << "Pattern must be div " << (uint)d << std::endl;
+            // continue;
+
+            str_len_t add_size = d - str.size() % d;
+            str.resize(str.size() + add_size);
+            for (str_pos_t i = str.size() - add_size; i < str.size(); ++i) {
+                str[i] = '\0';
+            }
         }
 
         DnaBuffer dna_buf{str};
@@ -155,7 +162,9 @@ int main_blocking_d() {
         auto dna_d1 = dna_buf.GetAccessor();
         DnaSeqDataAccessor<d> pattern{dna_d1.data(), dna_d1.Size() / d};
 
-        auto [pos, sa_pos, is_finded] = sbt.Search(pattern, dna_data);
+        auto [pos, sa_pos, lcp] = sbt.Search(pattern, dna_data);
+
+        // std::cout << "lcp: " << lcp << std::endl;
         if (is_finded) {
             str_len_t answer_len = dna_data.Size() - pos;
             str_len_t len = std::min(answer_len, max_print_len);

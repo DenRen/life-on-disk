@@ -115,8 +115,8 @@ public:
 
     // dna pos, sa pos, is find
     template <typename AccessorT>
-    std::tuple<str_pos_t, str_pos_t, bool> Search(const AccessorT& pattern,
-                                                  const AccessorT& dna_data);
+    std::tuple<str_pos_t, str_pos_t, str_len_t> Search(const AccessorT& pattern,
+                                                       const AccessorT& dna_data);
 
     void Dump() {
         DumpImpl((const NodeBase*)m_root, 0);
@@ -386,8 +386,8 @@ void StringBTree<CharT>::DumpImpl(const NodeBase* node_base, int depth) {
 
 template <typename CharT>
 template <typename AccessorT>
-std::tuple<str_pos_t, str_pos_t, bool> StringBTree<CharT>::Search(const AccessorT& pattern,
-                                                                  const AccessorT& dna) {
+std::tuple<str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Search(const AccessorT& pattern,
+                                                                       const AccessorT& dna) {
     {
         // pattern <= m_leftmost_str
         str_len_t len = std::min(pattern.Size(), dna.StrSize(m_leftmost_str));
@@ -467,7 +467,7 @@ std::tuple<str_pos_t, str_pos_t, bool> StringBTree<CharT>::Search(const Accessor
 
     str_pos_t sa_pos = GetSAPos(sbt_node_base, ext_pos_res);
     std::cout << cur_lcp << ", " << pattern.Size() << std::endl;
-    return {str_pos, sa_pos, cur_lcp >= pattern.Size()};
+    return {str_pos, sa_pos, cur_lcp};
 }
 
 template <typename CharT>

@@ -3,7 +3,7 @@
 #include <cstdint>
 
 template <typename T>
-T misalign_load(const uint8_t* data) noexcept {
+T misalign_load(const u8* data) noexcept {
     union {
         uint8_t arr[sizeof(T)];
         T val;
@@ -14,6 +14,15 @@ T misalign_load(const uint8_t* data) noexcept {
     }
 
     return value.val;
+}
+
+template <typename T>
+void misalign_store(u8* dest, T value) noexcept {
+    u8* value_arr = (u8*)&value;
+
+    for (std::size_t i = 0; i < sizeof(T); ++i) {
+        dest[i] = value_arr[i];
+    }
 }
 
 template <typename T, typename U>

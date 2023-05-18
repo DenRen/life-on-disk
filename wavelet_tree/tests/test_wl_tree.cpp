@@ -47,19 +47,22 @@ TEST(BV, RANDOM) {
     const unsigned seed = 0xEDA + 0xDED + 32;
     std::mt19937_64 gen{seed};
 
-    const std::size_t bv_size = 1235;
+    const std::size_t bv_size_min = 4;
+    const std::size_t bv_size_max = 2000;
     std::size_t num_repeats = 100;
 
-    std::uniform_int_distribution<std::size_t> num_set_distrib{0, 2 * bv_size - 1};
-    std::uniform_int_distribution<std::size_t> pos_distrib{0, bv_size - 1};
-    std::uniform_int_distribution<uint8_t> set_distrib{0, 1};
-
-    BitVectorNaive bv_naive{bv_size};
-
-    BitVectorBuffer bv_buf{bv_size};
-    BitVector bv{bv_size, bv_buf.Data()};
-
     while (num_repeats--) {
+        std::uniform_int_distribution<std::size_t> bv_size_distrib{bv_size_min, bv_size_max};
+        const std::size_t bv_size = bv_size_distrib(gen);
+
+        std::uniform_int_distribution<std::size_t> num_set_distrib{0, 2 * bv_size - 1};
+        std::uniform_int_distribution<std::size_t> pos_distrib{0, bv_size - 1};
+        std::uniform_int_distribution<uint8_t> set_distrib{0, 1};
+
+        BitVectorNaive bv_naive{bv_size};
+
+        BitVectorBuffer bv_buf{bv_size};
+        BitVector bv{bv_size, bv_buf.Data()};
         auto num_set = num_set_distrib(gen);
         while (num_set--) {
             const auto pos = pos_distrib(gen);

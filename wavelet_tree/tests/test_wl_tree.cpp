@@ -48,8 +48,8 @@ TEST(BV, RANDOM) {
     const std::size_t bv_size = 1235;
     std::size_t num_repeats = 100;
 
-    std::uniform_int_distribution<std::size_t> num_set_distrib{0, 2 * bv_size};
-    std::uniform_int_distribution<std::size_t> pos_distrib{0, bv_size};
+    std::uniform_int_distribution<std::size_t> num_set_distrib{0, 2 * bv_size - 1};
+    std::uniform_int_distribution<std::size_t> pos_distrib{0, bv_size - 1};
     std::uniform_int_distribution<uint8_t> set_distrib{0, 1};
 
     BitVectorNaive bv_naive{bv_size};
@@ -100,7 +100,7 @@ TEST(BV, GET_RANK_SPEED) {
 
     const std::size_t seed = 0xDED;
     std::mt19937_64 gen{seed};
-    std::uniform_int_distribution<std::size_t> pos_distrib{0, bv_size};
+    std::uniform_int_distribution<std::size_t> pos_distrib{0, bv_size - 1};
 
     for (std::size_t i = 0; i < bv_size; ++i) {
         const auto pos = pos_distrib(gen);
@@ -120,7 +120,7 @@ TEST(BV, GET_RANK_SPEED) {
     };
 
     std::size_t bv_naive_time = 0, bv_time = 0;
-    std::size_t num_repeats = 10;
+    std::size_t num_repeats = 2;
     for (int i = 0; i < num_repeats; ++i) {
         bv_naive_time += exec_time(rank_linear, bv_naive);
         bv_time += exec_time(rank_linear, bv);
@@ -130,6 +130,12 @@ TEST(BV, GET_RANK_SPEED) {
 
     std::cout << "bv_naive_time: " << bv_naive_time << std::endl;
     std::cout << "bv_time: " << bv_time << std::endl;
+}
+
+TEST(LOG2_UP, MANUAL) {
+    ASSERT_EQ(Log2Up(15), 4);
+    ASSERT_EQ(Log2Up(16), 5);
+    ASSERT_EQ(Log2Up(17), 5);
 }
 
 TEST(WAVELET_TREE, MANUAL) {}

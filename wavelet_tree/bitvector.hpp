@@ -1,6 +1,8 @@
 #pragma once
 
+#include <bit>
 #include <vector>
+#include <cmath>
 
 #include "../common/common_type.h"
 #include "../common/help_func.h"
@@ -38,13 +40,9 @@ public:
     using chank_t = uint32_t;
 
     CompressedNumberBuf(u8 number_bit_len, std::size_t size)
-        : m_buf(sizeof(chank_t) + DivUp(number_bit_len * size, 8))
+        : m_bit_len{std::max<u8>(9, std::min<u8>(number_bit_len, 15))}
         , m_size{size}
-        , m_bit_len{number_bit_len} {
-        if (!(m_bit_len > 8 && m_bit_len < 16)) {
-            throw std::invalid_argument{"Incorrect bit length"};
-        }
-    }
+        , m_buf(sizeof(chank_t) + DivUp(m_bit_len * size, 8)) {}
 
     std::size_t Size() const noexcept {
         return m_size;
@@ -66,8 +64,8 @@ public:
 
         auto l_shift = bit_pos % 8;
         auto r_shift = 8 * sizeof(chank_t) - l_shift - m_bit_len;
-        word = word << l_shift;
-        word = word >> (l_shift + r_shift);
+        word <<= l_shift;
+        word >>= (l_shift + r_shift);
         return word;
     }
 
@@ -81,7 +79,7 @@ public:
         auto r_shift = 8 * sizeof(chank_t) - l_shift - m_bit_len;
 
         chank_t mask = (1u << m_bit_len) - 1;
-        mask = mask << r_shift;
+        mask <<= r_shift;
 
         word &= ~mask;
         word |= (value << r_shift);
@@ -103,16 +101,65 @@ public:
     }
 
 private:
+    u8 m_bit_len;
     std::vector<uint8_t> m_buf;
     std::size_t m_size;
-    u8 m_bit_len;
 };
+
+constexpr std::size_t Log2Up(std::size_t value) noexcept {
+    return 8 * sizeof(value) - std::countl_zero(value);
+}
 
 class BitVector {
 public:
+    static std::size_t CalcSuperblockBitSize(std::size_t bv_size) noexcept {
+        return std::pow(Log2Up(bv_size), 2);
+    }
+
+    static std::size_t CalcNumSuperblock(std::size_t bv_size) noexcept {
+        return bv_size / CalcSuperblockBitSize(bv_size);
+    }
+
+    static std::size_t CalcBlockBitSize(std::size_t bv_size) noexcept {
+        return Log2Up(bv_size);
+    }
+
+    static std::size_t CalcNumBlock(std::size_t bv_size) noexcept {
+        return bv_size / Log2Up(bv_size);
+    }
+
     BitVector(std::size_t size, uint8_t* buf)
         : m_size(size)
-        , m_buf{buf} {}
+        , m_buf{buf}
+        , m_superblocks(CalcNumSuperblock(size))
+        , m_blocks{(u8)Log2Up(CalcSuperblockBitSize(size)), CalcNumBlock(size)} {
+        const auto num_sblock = m_superblocks.size();
+        const auto num_blocks = m_blocks.Size();
+
+        const auto blk_num_bits = CalcBlockBitSize(m_size);
+        const auto sblk_num_bits = CalcSuperblockBitSize(m_size);
+        assert(sblk_num_bits % blk_num_bits == 0);
+
+        const auto num_blk_in_sblk = sblk_num_bits / blk_num_bits;
+
+        std::size_t full_num_bits = 0;
+        std::size_t i_sb = 0, i_blk_in_sblk = 0;
+        for (std::size_t i_blk = 0; i_blk < num_blocks; ++i_blk) {
+            std::size_t blk_bit_ctr = 0;
+            for (std::size_t j = 0; j < blk_num_bits; ++j) {
+                std::size_t bit_pos = j + i_blk * blk_num_bits;
+                blk_bit_ctr += Get(bit_pos);
+            }
+
+            m_blocks.Set(i_blk, blk_bit_ctr);
+
+            full_num_bits += blk_bit_ctr;
+            if (++i_blk_in_sblk == num_blk_in_sblk) {
+                i_blk_in_sblk = 0;
+                m_superblocks[i_sb++] = full_num_bits;
+            }
+        }
+    }
 
     std::size_t Size() const noexcept {
         return m_size;
@@ -138,6 +185,9 @@ public:
     }
 
     std::size_t GetRank(std::size_t pos) const noexcept {
+        
+
+
         std::size_t rank = 0;
         for (std::size_t i = 0; i < pos; ++i) {
             rank += Get(i);
@@ -149,7 +199,8 @@ private:
     uint8_t* m_buf;
     std::size_t m_size;
 
-    // std::vector<std::size_t> m_superblock;
+    std::vector<std::size_t> m_superblocks;
+    CompressedNumberBuf m_blocks;
 };
 
 class BitVectorBuffer {

@@ -31,6 +31,9 @@ public:
         return rank;
     }
 
+    void Reinit() noexcept {}
+    void Dump() const {}
+
 private:
     std::vector<bool> m_buf;
 };
@@ -44,16 +47,15 @@ public:
         , m_size{size}
         , m_buf(sizeof(chank_t) + DivUp(m_bit_len * size, 8)) {}
 
+    // void Init(u8 number_bit_len, std::size_t size) {
+
+    // }
+
     std::size_t Size() const noexcept {
         return m_size;
     }
-
-    static chank_t Revert(chank_t word) noexcept {
-        u8* bytes = (u8*)&word;
-        for (u8 i = 0; i < sizeof(word) / 2; ++i) {
-            std::swap(bytes[i], bytes[sizeof(word) - 1 - i]);
-        }
-        return word;
+    u8 NumBitLen() const noexcept {
+        return m_bit_len;
     }
 
     chank_t Get(std::size_t pos) const noexcept {
@@ -101,6 +103,15 @@ public:
     }
 
 private:
+    static chank_t Revert(chank_t word) noexcept {
+        u8* bytes = (u8*)&word;
+        for (u8 i = 0; i < sizeof(word) / 2; ++i) {
+            std::swap(bytes[i], bytes[sizeof(word) - 1 - i]);
+        }
+        return word;
+    }
+
+private:
     u8 m_bit_len;
     std::vector<uint8_t> m_buf;
     std::size_t m_size;
@@ -112,51 +123,41 @@ constexpr std::size_t Log2Up(std::size_t value) noexcept {
 
 class BitVector {
 public:
-    static std::size_t CalcSuperblockBitSize(std::size_t bv_size) noexcept {
-        return std::pow(Log2Up(bv_size), 2);
-    }
-
-    static std::size_t CalcNumSuperblock(std::size_t bv_size) noexcept {
-        return bv_size / CalcSuperblockBitSize(bv_size);
-    }
-
-    static std::size_t CalcBlockBitSize(std::size_t bv_size) noexcept {
-        return Log2Up(bv_size);
-    }
-
-    static std::size_t CalcNumBlock(std::size_t bv_size) noexcept {
-        return bv_size / Log2Up(bv_size);
-    }
-
     BitVector(std::size_t size, uint8_t* buf)
         : m_size(size)
         , m_buf{buf}
-        , m_superblocks(CalcNumSuperblock(size))
-        , m_blocks{(u8)Log2Up(CalcSuperblockBitSize(size)), CalcNumBlock(size)} {
-        const auto num_sblock = m_superblocks.size();
-        const auto num_blocks = m_blocks.Size();
+        , m_sblk_bit_size{Log2Up(size) * Log2Up(size)}
+        , m_blk_bit_size{Log2Up(size)}
+        , m_sblk(size / m_sblk_bit_size)
+        , m_blk{(u8)Log2Up(m_sblk_bit_size), size / Log2Up(size)} {
+        Reinit();
+    }
 
-        const auto blk_num_bits = CalcBlockBitSize(m_size);
-        const auto sblk_num_bits = CalcSuperblockBitSize(m_size);
-        assert(sblk_num_bits % blk_num_bits == 0);
+    void Reinit() noexcept {
+        const auto num_sblk = m_sblk.size();
+        const auto num_blk = m_blk.Size();
 
-        const auto num_blk_in_sblk = sblk_num_bits / blk_num_bits;
+        assert(m_sblk_bit_size % m_blk_bit_size == 0);
+        assert(m_sblk_bit_size / m_blk_bit_size == Log2Up(m_size));
+
+        const auto num_blk_in_sblk = Log2Up(m_size);
 
         std::size_t full_num_bits = 0;
-        std::size_t i_sb = 0, i_blk_in_sblk = 0;
-        for (std::size_t i_blk = 0; i_blk < num_blocks; ++i_blk) {
-            std::size_t blk_bit_ctr = 0;
-            for (std::size_t j = 0; j < blk_num_bits; ++j) {
-                std::size_t bit_pos = j + i_blk * blk_num_bits;
-                blk_bit_ctr += Get(bit_pos);
+        std::size_t i_sb = 0, i_blk_in_sblk = 0, sblk_bit_ctr = 0;
+        for (std::size_t i_blk = 0; i_blk < num_blk; ++i_blk) {
+            for (std::size_t j = 0; j < m_blk_bit_size; ++j) {
+                std::size_t bit_pos = j + i_blk * m_blk_bit_size;
+                sblk_bit_ctr += Get(bit_pos);
             }
 
-            m_blocks.Set(i_blk, blk_bit_ctr);
+            m_blk.Set(i_blk, sblk_bit_ctr);
 
-            full_num_bits += blk_bit_ctr;
             if (++i_blk_in_sblk == num_blk_in_sblk) {
                 i_blk_in_sblk = 0;
-                m_superblocks[i_sb++] = full_num_bits;
+
+                full_num_bits += sblk_bit_ctr;
+                m_sblk[i_sb++] = full_num_bits;
+                sblk_bit_ctr = 0;
             }
         }
     }
@@ -185,22 +186,50 @@ public:
     }
 
     std::size_t GetRank(std::size_t pos) const noexcept {
-        
-
+        std::size_t i_sblk = pos / m_sblk_bit_size;
+        std::size_t in_sblk_pos = pos % m_sblk_bit_size;
+        std::size_t i_blk = pos / m_blk_bit_size;
 
         std::size_t rank = 0;
-        for (std::size_t i = 0; i < pos; ++i) {
-            rank += Get(i);
+
+        if (pos >= m_sblk_bit_size) {
+            rank += m_sblk[i_sblk - 1];
         }
+
+        if (in_sblk_pos >= m_blk_bit_size) {
+            rank += m_blk.Get(i_blk - 1);
+        }
+
+        std::size_t j_begin = i_blk * m_blk_bit_size;
+        std::size_t j_end = pos;
+        for (std::size_t j = j_begin; j < j_end; ++j) {
+            rank += Get(j);
+        }
+
         return rank;
+    }
+
+    void Dump() const {
+        printf("sblk bit size: %zu\n", m_sblk_bit_size);
+        printf("blk bit size: %zu\n", m_blk_bit_size);
+        printf("size: %zu\n", m_size);
+        for (std::size_t i_sblk = 0; i_sblk < m_sblk.size(); ++i_sblk) {
+            printf("sblk[%zu]: %zu\n", i_sblk, m_sblk[i_sblk]);
+        }
+
+        for (std::size_t i_blk = 0; i_blk < m_blk.Size(); ++i_blk) {
+            printf("blk[%zu]: %u\n", i_blk, m_blk.Get(i_blk));
+        }
     }
 
 private:
     uint8_t* m_buf;
     std::size_t m_size;
 
-    std::vector<std::size_t> m_superblocks;
-    CompressedNumberBuf m_blocks;
+    std::size_t m_sblk_bit_size;  // Num bits in 1 super block
+    std::size_t m_blk_bit_size;   // Num bits in 1 block
+    std::vector<std::size_t> m_sblk;
+    CompressedNumberBuf m_blk;
 };
 
 class BitVectorBuffer {

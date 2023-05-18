@@ -15,6 +15,7 @@ TEST(BV, MANUAL) {
         }
 
         bv.Set(0, true);
+        bv.Reinit();
         ASSERT_EQ(bv.Get(0), true);
         ASSERT_EQ(bv.GetRank(0), 0);
         ASSERT_EQ(bv.GetRank(1), 1);
@@ -23,6 +24,7 @@ TEST(BV, MANUAL) {
         ASSERT_EQ(bv.GetRank(4), 1);
 
         bv.Set(2, true);
+        bv.Reinit();
         ASSERT_EQ(bv.Get(0), true);
         ASSERT_EQ(bv.GetRank(0), 0);
         ASSERT_EQ(bv.GetRank(1), 1);
@@ -67,9 +69,12 @@ TEST(BV, RANDOM) {
             bv.Set(pos, value);
         }
 
+        bv_naive.Reinit();
+        bv.Reinit();
+
         for (std::size_t i = 0; i < bv_size; ++i) {
             ASSERT_EQ(bv.Get(i), bv_naive.Get(i));
-            ASSERT_EQ(bv.GetRank(i + 1), bv_naive.GetRank(i + 1));
+            ASSERT_EQ(bv.GetRank(i + 1), bv_naive.GetRank(i + 1)) << "i: " << i;
         }
     }
 }
@@ -79,20 +84,19 @@ TEST(BV, GET_RANK_SPEED) {
         return std::chrono::high_resolution_clock::now();
     };
 
-    auto delta_ms = [](auto time_start, auto time_finish) {
+    auto delta_us = [](auto time_start, auto time_finish) {
         auto delta = time_finish - time_start;
-        return std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+        return std::chrono::duration_cast<std::chrono::microseconds>(delta).count();
     };
 
-    auto exec_time = [&](auto&& func, auto&&... args) {
+    auto exec_time = [&](auto& res, auto&& func, auto&&... args) {
         auto time_begin = now();
-        volatile auto res =
-            std::forward<decltype(func)>(func)(std::forward<decltype(args)>(args)...);
+        res = std::forward<decltype(func)>(func)(std::forward<decltype(args)>(args)...);
         auto time_end = now();
-        return delta_ms(time_begin, time_end);
+        return delta_us(time_begin, time_end);
     };
 
-    const std::size_t bv_size = 32 * 1024;
+    const std::size_t bv_size = 16 * 1024;
     BitVectorNaive bv_naive{bv_size};
 
     BitVectorBuffer bv_buf{bv_size};
@@ -108,6 +112,9 @@ TEST(BV, GET_RANK_SPEED) {
         bv.Set(pos, true);
     }
 
+    bv_naive.Reinit();
+    bv.Reinit();
+
     auto rank_linear = [](auto& bv) {
         auto size = bv.Size();
 
@@ -119,17 +126,22 @@ TEST(BV, GET_RANK_SPEED) {
         return sum_rank;
     };
 
-    std::size_t bv_naive_time = 0, bv_time = 0;
+    std::size_t bv_naive_time_us = 0, bv_time_us = 0;
     std::size_t num_repeats = 2;
     for (int i = 0; i < num_repeats; ++i) {
-        bv_naive_time += exec_time(rank_linear, bv_naive);
-        bv_time += exec_time(rank_linear, bv);
-    }
-    bv_naive_time /= num_repeats;
-    bv_time /= num_repeats;
+        std::size_t res_naive = 0, res = 0;
+        bv_naive_time_us += exec_time(res_naive, rank_linear, bv_naive);
+        bv_time_us += exec_time(res, rank_linear, bv);
 
-    std::cout << "bv_naive_time: " << bv_naive_time << std::endl;
-    std::cout << "bv_time: " << bv_time << std::endl;
+        ASSERT_EQ(res, res_naive);
+    }
+    bv_naive_time_us /= num_repeats;
+    bv_time_us /= num_repeats;
+
+    ASSERT_LT(100 * bv_time_us, bv_naive_time_us);
+
+    // std::cout << "bv_naive_time_us: " << bv_naive_time_us << std::endl;
+    // std::cout << "bv_time_us: " << bv_time_us << std::endl;
 }
 
 TEST(LOG2_UP, MANUAL) {

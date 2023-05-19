@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <bit>
 
 template <typename T>
 T misalign_load(const u8* data) noexcept {
@@ -28,4 +29,9 @@ void misalign_store(u8* dest, T value) noexcept {
 template <typename T, typename U>
 constexpr auto DivUp(T value, U dvider) noexcept {
     return value / dvider + !!(value % dvider);
+}
+
+template <typename U>
+constexpr U Log2Up(U value) noexcept {
+    return 8 * sizeof(value) - std::countl_zero(value);
 }

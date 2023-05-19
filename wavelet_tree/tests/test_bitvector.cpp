@@ -50,8 +50,8 @@ TEST(BV, RANDOM) {
     const std::size_t bv_size_max = 2000;
     std::size_t num_repeats = 100;
 
+    std::uniform_int_distribution<BitVector::size_t> bv_size_distrib{bv_size_min, bv_size_max};
     while (num_repeats--) {
-        std::uniform_int_distribution<BitVector::size_t> bv_size_distrib{bv_size_min, bv_size_max};
         const auto bv_size = bv_size_distrib(gen);
 
         std::uniform_int_distribution<std::size_t> num_set_distrib{0, 2 * bv_size - 1};

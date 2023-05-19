@@ -46,17 +46,23 @@ public:
         : m_size{size}
         , m_sblk_bit_size{CalcSblkBitSize(size)}
         , m_blk_bit_size{CalcBlkBitSize(size)}
-        , m_sblk_size(size / m_sblk_bit_size) {
-        auto sblk_size = size / m_sblk_bit_size * sizeof(size_t);
+        , m_sblk_size(size ? size / m_sblk_bit_size : 0) {
+        auto sblk_size = size ? size / m_sblk_bit_size * sizeof(size_t) : 0;
         auto buf_size = DivUp(size, 8);
 
         m_sblk_pos = AlignPos(sizeof(BitVector) + buf_size);
         m_blk_pos = AlignPos(m_sblk_pos + sblk_size);
 
-        new (&BlkBuf()) CompressedNumberBuf{(u8)Log2Up(m_sblk_bit_size), size / Log2Up(size)};
+        if (size) {
+            new (&BlkBuf()) CompressedNumberBuf{(u8)Log2Up(m_sblk_bit_size), size / Log2Up(size)};
+        }
     }
 
     static size_t CalcOccupiedSize(size_t size) noexcept {
+        if (size == 0) {
+            return sizeof(BitVector);
+        }
+
         const auto sblk_bit_size = CalcSblkBitSize(size);
         const auto blk_bit_size = CalcBlkBitSize(size);
 
@@ -72,6 +78,10 @@ public:
     }
 
     void Reinit() noexcept {
+        if (m_size == 0) {
+            return;
+        }
+
         size_t* sblk = SblkBuf();
         CompressedNumberBuf& blk = BlkBuf();
 

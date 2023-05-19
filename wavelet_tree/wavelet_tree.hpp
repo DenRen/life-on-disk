@@ -2,6 +2,35 @@
 
 #include "bitvector.hpp"
 
+class WaveletTreeNaive {
+public:
+    using size_t = uint32_t;
+
+    template <typename NumberAccesstorT>
+    WaveletTreeNaive(const NumberAccesstorT& text) {
+        const auto text_size = text.Size();
+        m_buf.resize(text_size);
+        for (size_t i = 0; i < text_size; ++i) {
+            m_buf[i] = text[i];
+        }
+    }
+
+    size_t GetRank(size_t val, size_t pos) const {
+        if (pos > m_buf.size()) {
+            throw std::invalid_argument{"WT_Naive: pos is too large"};
+        }
+
+        size_t rank = 0;
+        for (size_t i = 0; i < pos; ++i) {
+            rank += m_buf[i] == val;
+        }
+        return rank;
+    }
+
+private:
+    std::vector<size_t> m_buf;
+};
+
 class alignas(8) WaveletTree {
 public:
     using size_t = uint32_t;
@@ -16,9 +45,7 @@ public:
             size_t occ_size = m_bv_pos_begin;
 
             for (auto bv_size : m_bv_sizes) {
-                if (bv_size) {
-                    occ_size += BitVector::CalcOccupiedSize(bv_size);
-                }
+                occ_size += BitVector::CalcOccupiedSize(bv_size);
             }
 
             return occ_size;
@@ -89,44 +116,91 @@ public:
         size_t* bv_poss = GetBitVectorPoss();
         bv_poss[0] = build_info.GetBitVectorPosBegin();
         for (size_t i = 1; i < num_bv; ++i) {
-            auto prev_bv_size = bv_sizes[i - 1] ? BitVector::CalcOccupiedSize(bv_sizes[i - 1]) : 0;
+            auto prev_bv_size = BitVector::CalcOccupiedSize(bv_sizes[i - 1]);
             bv_poss[i] = bv_poss[i - 1] + prev_bv_size;
         }
 
         // Construct bit vectors
         for (size_t i = 0; i < num_bv; ++i) {
-            if (bv_sizes[i]) {
-                if ((uint64_t)GetBitVectorPtr(i) & 0b111u) {
-                    std::cout << (uint64_t)GetBitVectorPtr(i) << std::endl;
-                    throw std::runtime_error{"GFFF"};
-                }
-                new (GetBitVectorPtr(i)) BitVector{bv_sizes[i]};
-            }
+            assert(!((uint64_t)GetBitVectorPtr(i) & 0b111u));
+            new (GetBitVectorPtr(i)) BitVector{bv_sizes[i]};
         }
 
         // Fill bit vectors
         std::vector<size_t> in_bv_pos(num_bv);
 
         const auto num_levels = Log2Up(alph_size - 1);
+        m_num_levels = num_levels;
         const auto text_size = text.Size();
         for (size_t i = 0; i < text_size; ++i) {
             auto val = text[i];
 
             size_t i_bv = 0;
             for (size_t i_lvl = 0; i_lvl < num_levels; ++i_lvl) {
-                auto& bv = GetBitVector(i_bv);
                 const bool bit = val & 1u;
+                val >>= 1;
+
+                auto& bv = GetBitVector(i_bv);
                 bv.Set(in_bv_pos[i_bv]++, bit);
 
                 i_bv = GetChildPos(i_bv, bit);
-                val >>= 1;
             }
         }
 
         for (size_t i = 0; i < num_bv; ++i) {
-            if (in_bv_pos[i] != bv_sizes[i]) {
-                throw std::runtime_error{"Detected incorrect WT build"};
+            assert(in_bv_pos[i] == bv_sizes[i]);
+        }
+
+        for (size_t i_bv = 0; i_bv < num_bv; ++i_bv) {
+            auto& bv = GetBitVector(i_bv);
+            bv.Reinit();
+        }
+    }
+
+    size_t GetRank(size_t val, size_t pos) const {
+        size_t i_bv = 0, rank = pos;
+        for (size_t i_lvl = 0; i_lvl < m_num_levels; ++i_lvl) {
+            if (rank == 0) {
+                return 0;
             }
+
+            const bool bit = val & 1u;
+            val >>= 1;
+
+            const auto& bv = GetBitVector(i_bv);
+            if (bit) {
+                rank = bv.GetRank(rank);
+            } else {
+                const auto y = bv.GetRank(rank);
+                rank = rank - bv.GetRank(rank);
+            }
+
+            i_bv = GetChildPos(i_bv, bit);
+        }
+
+        return rank;
+    }
+
+    void Dump() const {
+        size_t i_bv = 0;
+        for (size_t i_lvl = 0; i_lvl < m_num_levels; ++i_lvl) {
+            const size_t num_lvl_bv = 1u << i_lvl;
+
+            for (size_t i_lvl_bv = 0; i_lvl_bv < num_lvl_bv; ++i_lvl_bv, ++i_bv) {
+                const auto& bv = GetBitVector(i_bv);
+
+                for (size_t i_bit = 0; i_bit < bv.Size(); ++i_bit) {
+                    putchar(bv.Get(i_bit) ? '1' : '0');
+
+                    if (i_bit + 1 < bv.Size()) {
+                        putchar(' ');
+                    }
+                }
+                if (i_lvl_bv + 1 < num_lvl_bv) {
+                    putchar('\'');
+                }
+            }
+            putchar('\n');
         }
     }
 
@@ -138,13 +212,24 @@ private:
     size_t* GetBitVectorPoss() noexcept {
         return (size_t*)(this + 1);
     }
+    const size_t* GetBitVectorPoss() const noexcept {
+        return (size_t*)(this + 1);
+    }
 
     BitVector* GetBitVectorPtr(size_t node_pos) noexcept {
         return (BitVector*)((u8*)this + GetBitVectorPoss()[node_pos]);
     }
+    const BitVector* GetBitVectorPtr(size_t node_pos) const noexcept {
+        return (BitVector*)((u8*)this + GetBitVectorPoss()[node_pos]);
+    }
+
     BitVector& GetBitVector(size_t node_pos) noexcept {
+        return *GetBitVectorPtr(node_pos);
+    }
+    const BitVector& GetBitVector(size_t node_pos) const noexcept {
         return *GetBitVectorPtr(node_pos);
     }
 
 private:
+    size_t m_num_levels;
 };

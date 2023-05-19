@@ -66,8 +66,8 @@ public:
     }
 
     static std::size_t CalcOccupiedSize(u8 number_bit_len, std::size_t size) noexcept {
-        return sizeof(CompressedNumberBuf) +
-               CalcBufSize(GetAlignedNumberBitLen(number_bit_len), size);
+        const auto buf_size = CalcBufSize(GetAlignedNumberBitLen(number_bit_len), size);
+        return sizeof(CompressedNumberBuf) + buf_size;
     }
 
 private:

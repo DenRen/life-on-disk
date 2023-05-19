@@ -3,7 +3,6 @@
 #include <chrono>
 
 #include "bitvector.hpp"
-#include "wavelet_tree.hpp"
 
 TEST(BV, MANUAL) {
     auto test = [](auto& bv) {
@@ -152,5 +151,3 @@ TEST(LOG2_UP, MANUAL) {
     ASSERT_EQ(Log2Up(16u), 5u);
     ASSERT_EQ(Log2Up(17u), 5u);
 }
-
-TEST(WAVELET_TREE, MANUAL) {}

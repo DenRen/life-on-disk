@@ -42,10 +42,6 @@ class alignas(8) BitVector {
 public:
     using size_t = uint32_t;
 
-    static size_t AlignPos(size_t pos) noexcept {
-        return 8 * DivUp(pos, 8);
-    };
-
     BitVector(size_t size)
         : m_size{size}
         , m_sblk_bit_size{CalcSblkBitSize(size)}
@@ -58,8 +54,6 @@ public:
         m_blk_pos = AlignPos(m_sblk_pos + sblk_size);
 
         new (&BlkBuf()) CompressedNumberBuf{(u8)Log2Up(m_sblk_bit_size), size / Log2Up(size)};
-
-        Reinit();
     }
 
     static size_t CalcOccupiedSize(size_t size) noexcept {
@@ -74,7 +68,7 @@ public:
         auto sblk_pos = AlignPos(sizeof(BitVector) + buf_size);
         auto blk_pos = AlignPos(sblk_pos + sblk_size);
 
-        return blk_pos + blk_size;
+        return AlignPos(blk_pos + blk_size);
     }
 
     void Reinit() noexcept {

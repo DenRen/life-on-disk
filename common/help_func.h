@@ -35,3 +35,7 @@ template <typename U>
 constexpr U Log2Up(U value) noexcept {
     return 8 * sizeof(value) - std::countl_zero(value);
 }
+
+static size_t AlignPos(size_t pos) noexcept {
+    return 8 * DivUp(pos, 8);
+};

@@ -41,7 +41,7 @@ TEST(DNA_BIT_OPS, READ) {
         std::array<uint8_t, 1000> buf;
 
         uint64_t pos_min = 0;
-        uint64_t pos_max = 8 * sizeof(buf) / 3;
+        uint64_t pos_max = 8 * sizeof(buf) / 3 - 1;
 
         std::mt19937_64 gen{seed};
         std::uniform_int_distribution<uint64_t> pos_distrib{pos_min, pos_max};
@@ -66,4 +66,17 @@ TEST(DNA_BIT_OPS, READ) {
             ops.clear();
         }
     }
+}
+
+TEST(DnaSeqSymb, Naive) {
+    DnaSymbSeq<4> seq;
+    seq.Set(DnaSymb::A, 0);
+    seq.Set(DnaSymb::C, 1);
+    seq.Set(DnaSymb::T, 2);
+    seq.Set(DnaSymb::G, 3);
+
+    ASSERT_EQ(seq[0], DnaSymb::A);
+    ASSERT_EQ(seq[1], DnaSymb::C);
+    ASSERT_EQ(seq[2], DnaSymb::T);
+    ASSERT_EQ(seq[3], DnaSymb::G);
 }

@@ -247,7 +247,7 @@ ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna
     return {suff_arr_path};
 }
 
-DnaBuffer::DnaBuffer(std::string dna_str)
+DnaBuffer::DnaBuffer(std::string_view dna_str)
     : m_num_dna{dna_str.size()} {
     m_dna_buf.resize(DivUp(m_num_dna * DnaSymbBitSize, 8));
     uint8_t* dest_data_begin = m_dna_buf.data();

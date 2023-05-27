@@ -58,6 +58,11 @@ public:
     static SearchResult Search(const AccessorT& pattern, const InnerNode* root, str_len_t last_lcp,
                                in_blk_pos_t ext_pos_begin, const AccessorT& dna_text);
 
+    template <typename AccessorT>
+    static std::pair<in_blk_pos_t, bool> RSearch(const AccessorT& pattern, const InnerNode* root,
+                                                 str_len_t last_lcp, in_blk_pos_t ext_pos_begin,
+                                                 const AccessorT& dna_text);
+
     static const Branch* LowerBound(const Branch* begin, const Branch* end, CharT symb) noexcept {
         return std::lower_bound(begin, end, symb, [](const Branch& lhs, CharT cur_symb) {
             return lhs.symb < cur_symb;
@@ -530,6 +535,70 @@ typename PT<CharT>::SearchResult PT<CharT>::Search(const AccessorT& pattern, con
     }
 
     return SearchResult{.ext_node_pos = ext_pos, .lcp = lcp};
+}
+
+// Return: ext_pos and is_rightmost for r from [l, r]
+template <typename CharT>
+template <typename AccessorT>
+std::pair<in_blk_pos_t, bool> PT<CharT>::RSearch(const AccessorT& pattern, const InnerNode* root,
+                                                 str_len_t last_lcp, in_blk_pos_t ext_pos_begin,
+                                                 const AccessorT& dna) {
+    const InnerNode* node = root;
+    in_blk_pos_t ext_pos = 0;
+
+    PT<CharT>::Wrapper pt{root, ext_pos_begin};
+
+    std::vector<const InnerNode*> path;
+
+    str_len_t cur_len = 0;
+    while (true) {
+        if (pattern.Size() <= cur_len) {
+            node = path.back();
+            path.pop_back();
+
+            while (true) {
+                const Branch* branchs_begin = node->GetBranchs();
+                const Branch* branchs_end = branchs_begin + node->num_branch;
+                const Branch* branch = LowerBound(branchs_begin, branchs_end, pattern[node->len]);
+
+                assert(branch != branchs_end);
+                if (branch + 1 == branchs_end) {
+                    if (path.empty()) {
+                        return {0, true};
+                    }
+
+                    node = path.back();
+                    path.pop_back();
+                } else {
+                    ext_pos = pt.GetLeftmostExt(branch + 1);
+                    return {ext_pos, false};
+                }
+            }
+        }
+
+        path.push_back(node);
+
+        CharT cur_symb = pattern[node->len];
+
+        const Branch* branchs_begin = node->GetBranchs();
+        const Branch* branchs_end = branchs_begin + node->num_branch;
+        const Branch* branch = LowerBound(branchs_begin, branchs_end, cur_symb);
+
+        if (branch != branchs_end) {
+            bool is_inner_node_pos = branch->node_pos < ext_pos_begin;
+            if (is_inner_node_pos) {
+                node = pt.GetNode(branch->node_pos);
+                cur_len = node->len;
+            } else {
+                str_pos_t str_pos = misalign_load<str_pos_t>((const u8*)root + ext_pos);
+                cur_len = dna.StrSize(str_pos);
+            }
+        } else {
+            throw std::runtime_error{"Some error"};
+        }
+    }
+
+    assert(0);
 }
 
 }  // namespace DNA_PT

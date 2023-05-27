@@ -191,6 +191,50 @@ public:
         return rank;
     }
 
+    // m_num_levels = 4
+    // input: val = C***, signif_bit_len = 1
+    // input: val = CA**, signif_bit_len = 2
+    size_t GetFirstRank(size_t val, u8 signif_bit_len, size_t pos) const {
+        assert(signif_bit_len <= m_num_levels);
+
+        size_t bit_pos = 1u << (m_num_levels - 1);
+
+        size_t i_bv = 0, rank = pos;
+        for (size_t i_lvl = 0; i_lvl < signif_bit_len; ++i_lvl) {
+            if (rank == 0) {
+                return 0;
+            }
+
+            const bool bit = !!(val & bit_pos);
+            bit_pos >>= 1;
+
+            const auto& bv = GetBitVector(i_bv);
+            if (bit) {
+                rank = bv.GetRank(rank);
+            } else {
+                const auto y = bv.GetRank(rank);
+                rank = rank - bv.GetRank(rank);
+            }
+
+            i_bv = GetChildPos(i_bv, bit);
+        }
+        
+        if (rank == 0) {
+            return 0;
+        }
+
+        for (size_t i_lvl = signif_bit_len; i_lvl < m_num_levels; ++i_lvl) {
+            const auto& bv = GetBitVector(i_bv);
+            size_t zero_rank = rank - bv.GetRank(rank);
+            if (zero_rank) {
+                rank = zero_rank;
+            }
+            i_bv = GetChildPos(i_bv, zero_rank == 0);
+        }
+
+        return rank;
+    }
+
     void Dump() const {
         size_t i_bv = 0;
         for (size_t i_lvl = 0; i_lvl < m_num_levels; ++i_lvl) {

@@ -113,10 +113,10 @@ public:
     static StringBTree Build(std::string sbt_dest_path, const AccessorT& dna_data,
                              std::string dna_data_sa_path);
 
-    // dna pos, sa pos, is find
+    // dna pos, left sa pos, right sa pos, is find
     template <typename AccessorT>
-    std::tuple<str_pos_t, str_pos_t, str_len_t> Search(const AccessorT& pattern,
-                                                       const AccessorT& dna_data);
+    std::tuple<str_pos_t, str_pos_t, str_pos_t, str_len_t> Search(const AccessorT& pattern,
+                                                                  const AccessorT& dna_data);
 
     void Dump() {
         DumpImpl((const NodeBase*)m_root, 0);
@@ -130,6 +130,22 @@ private:
         return (const NodeBase*)((const u8*)m_btree.GetData().data() + blk_pos * g_block_size);
     }
     str_pos_t GetSAPos(const NodeBase* node, in_blk_pos_t ext_pos);
+
+    const NodeBase* GetLeftmost(const NodeBase* sbt_node_base) {
+        using ExtItemT = typename InnerNode::ExtItemT;
+
+        while (sbt_node_base->IsInner()) {
+            PtWrapperT pt = GetPT(sbt_node_base);
+            const auto* pt_root = pt.GetRoot();
+
+            const auto ext_begin = pt.GetExtPos();
+            auto ext_item = misalign_load<ExtItemT>((const u8*)pt_root + ext_begin);
+
+            sbt_node_base = GetNodeBase(ext_item.child);
+        }
+
+        return sbt_node_base;
+    }
 
 private:
     FileMapperRead m_btree;
@@ -386,8 +402,8 @@ void StringBTree<CharT>::DumpImpl(const NodeBase* node_base, int depth) {
 
 template <typename CharT>
 template <typename AccessorT>
-std::tuple<str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Search(const AccessorT& pattern,
-                                                                       const AccessorT& dna) {
+std::tuple<str_pos_t, str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Search(
+    const AccessorT& pattern, const AccessorT& dna) {
     {
         // pattern <= m_leftmost_str
         str_len_t len = std::min(pattern.Size(), dna.StrSize(m_leftmost_str));
@@ -397,13 +413,13 @@ std::tuple<str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Search(const Acc
             CharT left_symb = dna[m_leftmost_str + i];
             if (patt_symb != left_symb) {
                 if (patt_symb < left_symb) {
-                    return {m_leftmost_str, 0, true};
+                    return {m_leftmost_str, 0, 0, true};
                 }
                 break;
             }
         }
         if (i == pattern.Size()) {
-            return {m_leftmost_str, 0, true};
+            return {m_leftmost_str, 0, 0, true};
         }
     }
 
@@ -417,17 +433,33 @@ std::tuple<str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Search(const Acc
             if (patt_symb != right_symb) {
                 if (patt_symb > right_symb) {
                     str_pos_t sa_pos = dna.Size() - 1;
-                    return {m_rightmost_str, sa_pos, true};
+                    return {m_rightmost_str, sa_pos, sa_pos + 1, true};
                 }
                 break;
             }
         }
     }
 
+    bool is_right_finded = false;
+    // str_pos_t
+
+    auto correct_ext_pos = [](in_blk_pos_t& ext_pos, in_blk_pos_t ext_begin) {
+        using ExtItemT = typename InnerNode::ExtItemT;
+        in_blk_pos_t local_ext_pos = (ext_pos - ext_begin) % sizeof(ExtItemT);
+        if (local_ext_pos > sizeof(str_pos_t)) {
+            ext_pos += sizeof(ExtItemT) - local_ext_pos;
+            local_ext_pos = 0;
+        }
+
+        return local_ext_pos;
+    };
+
     str_pos_t str_pos = 0;
     str_len_t cur_lcp = 0;
     in_blk_pos_t ext_pos_res = 0;
+    in_blk_pos_t ext_pos_right_res = 0;
     const NodeBase* sbt_node_base = (const NodeBase*)m_root;
+    const NodeBase* sbt_node_base_right = nullptr;
     while (true) {
         PtWrapperT pt = GetPT(sbt_node_base);
 
@@ -437,20 +469,38 @@ std::tuple<str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Search(const Acc
         auto [ext_pos, lcp] = PT_T::Search(pattern, pt_root, cur_lcp, ext_begin, dna);
         cur_lcp = lcp;
 
-        if (sbt_node_base->IsInner()) {
-            // Correct ext_pos
-            using ExtItemT = typename InnerNode::ExtItemT;
-            in_blk_pos_t local_ext_pos = (ext_pos - ext_begin) % sizeof(ExtItemT);
-            if (local_ext_pos > sizeof(str_pos_t)) {
-                ext_pos += sizeof(ExtItemT) - local_ext_pos;
-                local_ext_pos = 0;
-            }
+        /*
+                            /        /--------\        \
+                            &------- |REFACTOR| -------&
+                            \        \--------/        /
+        */
 
+        if (!is_right_finded && lcp == pattern.Size()) {
+            std::cout << "R calc ---------------------------------->\n";
+            is_right_finded = true;
+
+            auto [right_ext_pos, is_rightmost] =
+                PT_T::RSearch(pattern, pt_root, lcp, ext_begin, dna);
+            if (is_rightmost) {
+                ext_pos_right_res = 0;  // Spec value
+            } else {
+                ext_pos_right_res = right_ext_pos;
+                sbt_node_base_right = sbt_node_base;
+            }
+        }
+
+        if (sbt_node_base->IsInner()) {
+            in_blk_pos_t local_ext_pos = correct_ext_pos(ext_pos, ext_begin);
+
+            using ExtItemT = typename InnerNode::ExtItemT;
             auto ext_item = misalign_load<ExtItemT>((const u8*)pt_root + ext_pos - local_ext_pos);
             if (local_ext_pos == 0) {
                 // L
                 str_pos = pt.GetStr(ext_pos);
-                ext_pos_res = ext_pos;
+
+                sbt_node_base = GetNodeBase(ext_item.child);
+                sbt_node_base = GetLeftmost(sbt_node_base);
+                ext_pos_res = GetPT(sbt_node_base).GetExtPos();
                 break;
             } else if (local_ext_pos == sizeof(str_pos_t)) {
                 // R
@@ -466,8 +516,34 @@ std::tuple<str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Search(const Acc
     }
 
     str_pos_t sa_pos = GetSAPos(sbt_node_base, ext_pos_res);
-    std::cout << cur_lcp << ", " << pattern.Size() << std::endl;
-    return {str_pos, sa_pos, cur_lcp};
+
+    str_pos_t sa_pos_right = 0;
+    if (ext_pos_right_res) {
+        sbt_node_base = sbt_node_base_right;
+        in_blk_pos_t ext_pos = ext_pos_right_res;
+
+        if (sbt_node_base->IsInner()) {
+            using ExtItemT = typename InnerNode::ExtItemT;
+
+            PtWrapperT pt = GetPT(sbt_node_base);
+            const auto* pt_root = pt.GetRoot();
+
+            const auto ext_begin = pt.GetExtPos();
+            in_blk_pos_t local_ext_pos = correct_ext_pos(ext_pos, ext_begin);
+
+            auto ext_item = misalign_load<ExtItemT>((const u8*)pt_root + ext_pos - local_ext_pos);
+            sbt_node_base = GetNodeBase(ext_item.child);
+            sbt_node_base = GetLeftmost(sbt_node_base);
+
+            ext_pos_right_res = GetPT(sbt_node_base).GetExtPos();
+        }
+
+        sa_pos_right = GetSAPos(sbt_node_base, ext_pos_right_res);
+    } else {
+        sa_pos_right = std::min<str_len_t>(sa_pos + 1, dna.Size() - 1);
+    }
+
+    return {str_pos, sa_pos, sa_pos_right, cur_lcp};
 }
 
 template <typename CharT>
@@ -497,6 +573,8 @@ void StringBTree<CharT>::DumpExt(const NodeBase* node_base) {
 
 template <typename CharT>
 str_pos_t StringBTree<CharT>::GetSAPos(const NodeBase* node, in_blk_pos_t ext_pos) {
+    assert(node->IsLeaf());
+
     const auto global_sa_pos = node->suff_arr_left_size;
 
     const LeafNode* leaf_node = (const LeafNode*)node;

@@ -4,6 +4,7 @@ project(main VERSION 0.1.0)
 # include(CTest)
 # enable_testing()
 
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -g3 -O0")
 
 file(GLOB COMMON_SRC common/*.cpp common/*.h)

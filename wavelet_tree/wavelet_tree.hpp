@@ -2,6 +2,18 @@
 
 #include "bitvector.hpp"
 
+// 110 -> 011
+template <typename U>
+U reverse(U val, std::size_t bit_len) {
+    size_t rev = 0;
+    for (size_t i = 0; i < bit_len; ++i) {
+        rev <<= 1;
+        rev |= val & 1u;
+        val >>= 1;
+    }
+    return rev;
+}
+
 class WaveletTreeNaive {
 public:
     using size_t = uint32_t;
@@ -37,8 +49,9 @@ public:
 
     class BuildInfo {
     public:
-        BuildInfo(std::vector<size_t> bv_sizes, size_t bv_pos_begin)
-            : m_bv_sizes{std::move(bv_sizes)}
+        BuildInfo(std::vector<size_t> symb_freq, std::vector<size_t> bv_sizes, size_t bv_pos_begin)
+            : m_symb_freq{std::move(symb_freq)}
+            , m_bv_sizes{std::move(bv_sizes)}
             , m_bv_pos_begin{bv_pos_begin} {}
 
         size_t CalcOccupiedSize() const noexcept {
@@ -51,6 +64,10 @@ public:
             return occ_size;
         }
 
+        const std::vector<size_t>& GetSymbFreq() const noexcept {
+            return m_symb_freq;
+        }
+
         const std::vector<size_t>& GetBitVectorSizes() const noexcept {
             return m_bv_sizes;
         }
@@ -60,6 +77,7 @@ public:
         }
 
     private:
+        std::vector<size_t> m_symb_freq;
         std::vector<size_t> m_bv_sizes;
         size_t m_bv_pos_begin;
     };
@@ -70,7 +88,7 @@ public:
 
         const auto num_levels = Log2Up(alph_size - 1);
         alph_size = 1u << num_levels;
-        std::vector<size_t> symb_freq(1u << num_levels);
+        std::vector<size_t> symb_freq(alph_size);
         for (size_t i = 0; i < size; ++i) {
             auto value = text[i];
             assert(value < alph_size);
@@ -78,21 +96,10 @@ public:
             ++symb_freq[value];
         }
 
-        // 110 -> 011
-        auto reverse = [num_levels](size_t val) {
-            size_t rev = 0;
-            for (size_t i = 0; i < num_levels; ++i) {
-                rev <<= 1;
-                rev |= val & 1u;
-                val >>= 1;
-            }
-            return rev;
-        };
-
         std::vector<size_t> bv_sizes((1u << num_levels) - 1);
         size_t i_begin_last_lvl = (1u << (num_levels - 1)) - 1;
         for (size_t i = 0; i < alph_size; i += 2) {
-            size_t bv_size = symb_freq[reverse(i)] + symb_freq[reverse(i + 1)];
+            size_t bv_size = symb_freq[i] + symb_freq[i + 1];
             bv_sizes[i / 2 + i_begin_last_lvl] = bv_size;
         }
 
@@ -104,7 +111,7 @@ public:
         size_t bv_pos_begin = sizeof(WaveletTree) + bv_sizes.size() * sizeof(bv_sizes[0]);
         bv_pos_begin = AlignPos(bv_pos_begin);
 
-        return {std::move(bv_sizes), bv_pos_begin};
+        return {std::move(symb_freq), std::move(bv_sizes), bv_pos_begin};
     }
 
     template <typename NumberAccesstorT>
@@ -134,11 +141,12 @@ public:
         const auto text_size = text.Size();
         for (size_t i = 0; i < text_size; ++i) {
             auto val = text[i];
+            size_t bit_pos = 1u << (m_num_levels - 1);
 
             size_t i_bv = 0;
             for (size_t i_lvl = 0; i_lvl < num_levels; ++i_lvl) {
-                const bool bit = val & 1u;
-                val >>= 1;
+                const bool bit = !!(val & bit_pos);
+                bit_pos >>= 1;
 
                 auto& bv = GetBitVector(i_bv);
                 bv.Set(in_bv_pos[i_bv]++, bit);
@@ -158,14 +166,16 @@ public:
     }
 
     size_t GetRank(size_t val, size_t pos) const {
+        size_t bit_pos = 1u << (m_num_levels - 1);
+
         size_t i_bv = 0, rank = pos;
         for (size_t i_lvl = 0; i_lvl < m_num_levels; ++i_lvl) {
             if (rank == 0) {
                 return 0;
             }
 
-            const bool bit = val & 1u;
-            val >>= 1;
+            const bool bit = !!(val & bit_pos);
+            bit_pos >>= 1;
 
             const auto& bv = GetBitVector(i_bv);
             if (bit) {

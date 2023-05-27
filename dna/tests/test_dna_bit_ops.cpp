@@ -79,4 +79,18 @@ TEST(DnaSeqSymb, Naive) {
     ASSERT_EQ(seq[1], DnaSymb::C);
     ASSERT_EQ(seq[2], DnaSymb::T);
     ASSERT_EQ(seq[3], DnaSymb::G);
+
+    DnaSymbSeq<4> seq2;
+    seq2.Set(DnaSymb::A, 0);
+    seq2.Set(DnaSymb::C, 1);
+    seq2.Set(DnaSymb::G, 2);
+    seq2.Set(DnaSymb::G, 3);
+
+    ASSERT_LT(seq, seq2);
+    ASSERT_GT(seq2, seq);
+
+    seq.Set(DnaSymb::C, 0);
+
+    ASSERT_GT(seq, seq2);
+    ASSERT_LT(seq2, seq);
 }

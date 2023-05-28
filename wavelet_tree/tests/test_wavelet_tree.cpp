@@ -10,7 +10,7 @@ public:
     }
 };
 
-TEST(WAVELET_TREE, MANUAL) {
+TEST(WAVELET_TREE, RANK_MANUAL) {
     //             0  1  2  3   4  5  6  7
     TestText text{{1, 2, 4, 4, 10, 3, 3, 2}};
 
@@ -44,7 +44,7 @@ TEST(WAVELET_TREE, MANUAL) {
     test(wt);
 }
 
-TEST(WAVELET_TREE, RANDOM) {
+TEST(WAVELET_TREE, RANK_RANDOM) {
     using size_t = WaveletTree::size_t;
 
     const unsigned seed = 0xEDA + 0xDED * 64;
@@ -90,4 +90,22 @@ TEST(WAVELET_TREE, RANDOM) {
             }
         }
     }
+}
+
+TEST(WAVELET_TREE, SELECT_MANUAL) {
+    //             0  1  2  3   4  5  6  7
+    TestText text{{1, 2, 4, 4, 10, 3, 3, 2}};
+
+    auto build_info = WaveletTree::PrepareBuild(text, 16);
+    std::vector<u8> mapped_buf(build_info.CalcOccupiedSize());
+    auto& wt = *new (mapped_buf.data()) WaveletTree{text, 10, build_info};
+
+    ASSERT_EQ(wt.Select(1, 0), 0);
+    ASSERT_EQ(wt.Select(2, 0), 1);
+    ASSERT_EQ(wt.Select(2, 1), 7);
+    ASSERT_EQ(wt.Select(3, 0), 5);
+    ASSERT_EQ(wt.Select(3, 1), 6);
+    ASSERT_EQ(wt.Select(4, 0), 2);
+    ASSERT_EQ(wt.Select(4, 1), 3);
+    ASSERT_EQ(wt.Select(10, 0), 4);
 }

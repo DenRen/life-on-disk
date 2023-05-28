@@ -133,7 +133,7 @@ private:
 
 template <u8 d>
 std::tuple<DnaSymbSeq<d>, DnaBuffer, std::size_t> GetLeftRightPattern(const std::string& str,
-                                                                     std::size_t k) {
+                                                                      std::size_t k) {
     assert(k < d);
     assert(str.size() > d);
 
@@ -158,7 +158,7 @@ std::tuple<DnaSymbSeq<d>, DnaBuffer, std::size_t> GetLeftRightPattern(const std:
     if (!is_pattern_div_d) {
         str_len_t add_size = d - right_patt_str.size() % d;
         right_patt_str.resize(right_patt_str.size() + add_size);
-        
+
         for (str_pos_t i = right_patt_str.size() - add_size; i < right_patt_str.size(); ++i) {
             right_patt_str[i] = '\0';
         }
@@ -228,6 +228,7 @@ int main_blocking_d() {
 
     std::cout << "WT building started\n";
     auto build_info = WaveletTree::PrepareBuild(rev_num_dna_data, rev_num_alph_size);
+    std::cout << "WT occup size: " << build_info.CalcOccupiedSize() << std::endl;
     std::vector<u8> mapped_buf(build_info.CalcOccupiedSize());
     auto& wt =
         *new (mapped_buf.data()) WaveletTree{rev_num_dna_data, rev_num_alph_size, build_info};
@@ -279,31 +280,39 @@ int main_blocking_d() {
                 continue;
             }
 
+            std::cout << "sa_pos: " << sa_pos << ", sa_pos_right: " << sa_pos_right << std::endl;
+
             std::cout << "left_pattern: " << left_pattern << std::endl;
             const auto left_pattern_num = DnaSeq2Number(left_pattern);
-            std::size_t rank = wt.GetFirstRank(left_pattern_num, k,sa_pos);
-            std::size_t rank_begin = 0;
-            std::cout << "left_pattern_num: " << left_pattern_num << std::endl;
-            for (std::size_t i = 0; i + 1 < left_pattern_num; ++i) {
-                rank_begin += symb_freq[i];
-            }
+            auto [res_pos, is_rank_finded] =
+                wt.GetFirstRank(left_pattern_num, 3 * k, sa_pos, sa_pos_right);
 
-            const auto res_pos = rank_begin + rank;
-            std::cout << "rank: " << rank << std::endl;
-            std::cout << "rank_begin: " << rank_begin << std::endl;
+            if (!is_rank_finded) {
+                std::cout << "WT: rank not found\n";
+                continue;
+            }
+            // std::size_t rank_begin = 0;
+            // std::cout << "left_pattern_num: " << left_pattern_num << std::endl;
+            // for (std::size_t i = 0; i + 1 < left_pattern_num; ++i) {
+            //     rank_begin += symb_freq[i];
+            // }
+
+            // const auto res_pos = /*rank_begin + */ rank + sa_pos;
+            // std::cout << "rank: " << rank << std::endl;
+            // std::cout << "rank_begin: " << rank_begin << std::endl;
             std::cout << "pos: " << res_pos << std::endl;
 
-            std::cout << "SYMB: " << dna_data[suff_arr[res_pos - 1] + 0] << '\''
-                                  << dna_data[suff_arr[res_pos - 1] + 1] << '\''
-                                  << dna_data[suff_arr[res_pos - 1] + 2] << std::endl;
+            std::cout << "SYMB: " << dna_data[suff_arr[res_pos] - 1] << '\''
+                      << dna_data[suff_arr[res_pos] + 0] << '\'' << dna_data[suff_arr[res_pos] + 1]
+                      << std::endl;
 
-            std::cout << "SYMB: " << dna_data[suff_arr[res_pos] + 0] << '\''
-                                  << dna_data[suff_arr[res_pos] + 1] << '\''
-                                  << dna_data[suff_arr[res_pos] + 2] << std::endl;
+            // std::cout << "SYMB: " << dna_data[suff_arr[res_pos] + 0] << '\''
+            //                       << dna_data[suff_arr[res_pos] + 1] << '\''
+            //                       << dna_data[suff_arr[res_pos] + 2] << std::endl;
 
-            std::cout << "SYMB: " << dna_data[suff_arr[res_pos + 1] + 0] << '\''
-                                  << dna_data[suff_arr[res_pos + 1] + 1] << '\''
-                                  << dna_data[suff_arr[res_pos + 1] + 2] << std::endl;
+            // std::cout << "SYMB: " << dna_data[suff_arr[res_pos + 1] + 0] << '\''
+            //                       << dna_data[suff_arr[res_pos + 1] + 1] << '\''
+            //                       << dna_data[suff_arr[res_pos + 1] + 2] << std::endl;
 
             // std::cout << "is_finded: " << is_finded << std::endl;
             // std::cout << "num_term_symb: " << num_term_symb << std::endl;
@@ -341,12 +350,10 @@ int main_blocking_d() {
                     throw std::runtime_error{"Incorrect SA index!"};
                 }
 
-                std::cout << "sa_pos: " << sa_pos << ", sa_pos_right: " << sa_pos_right << std::endl;
-
             } else {
                 std::cout << "not found" << std::endl;
             }
-            std::cout << std::endl;//AGCGATGGGA
+            std::cout << std::endl;  // AGCGATGGGA
 
             break;
         }

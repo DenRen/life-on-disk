@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include "bitvector.hpp"
 
 // 110 -> 011
@@ -49,19 +50,17 @@ public:
 
     class BuildInfo {
     public:
-        BuildInfo(std::vector<size_t> symb_freq, std::vector<size_t> bv_sizes, size_t bv_pos_begin)
+        BuildInfo(std::vector<size_t> symb_freq, std::vector<size_t> bv_sizes, size_t bv_pos_begin,
+                  size_t select_alph_pos_begin, size_t select_table_pos_begin, size_t occup_size)
             : m_symb_freq{std::move(symb_freq)}
             , m_bv_sizes{std::move(bv_sizes)}
-            , m_bv_pos_begin{bv_pos_begin} {}
+            , m_bv_pos_begin{bv_pos_begin}
+            , m_select_alph_pos_begin{select_alph_pos_begin}
+            , m_select_table_pos_begin{select_table_pos_begin}
+            , m_occup_size{occup_size} {}
 
         size_t CalcOccupiedSize() const noexcept {
-            size_t occ_size = m_bv_pos_begin;
-
-            for (auto bv_size : m_bv_sizes) {
-                occ_size += BitVector::CalcOccupiedSize(bv_size);
-            }
-
-            return occ_size;
+            return m_occup_size;
         }
 
         const std::vector<size_t>& GetSymbFreq() const noexcept {
@@ -76,10 +75,21 @@ public:
             return m_bv_pos_begin;
         }
 
+        size_t GetSelectAlphPosBegin() const noexcept {
+            return m_select_alph_pos_begin;
+        }
+
+        size_t GetSelectTablePosBegin() const noexcept {
+            return m_select_table_pos_begin;
+        }
+
     private:
         std::vector<size_t> m_symb_freq;
         std::vector<size_t> m_bv_sizes;
         size_t m_bv_pos_begin;
+        size_t m_select_alph_pos_begin;
+        size_t m_select_table_pos_begin;
+        size_t m_occup_size;
     };
 
     template <typename NumberAccesstorT>
@@ -111,13 +121,28 @@ public:
         size_t bv_pos_begin = sizeof(WaveletTree) + bv_sizes.size() * sizeof(bv_sizes[0]);
         bv_pos_begin = AlignPos(bv_pos_begin);
 
-        return {std::move(symb_freq), std::move(bv_sizes), bv_pos_begin};
+        size_t select_alph_pos_begin = bv_pos_begin;
+        for (auto bv_size : bv_sizes) {
+            select_alph_pos_begin += BitVector::CalcOccupiedSize(bv_size);
+        }
+        select_alph_pos_begin = AlignPos(select_alph_pos_begin);
+
+        size_t select_table_pos_begin = select_alph_pos_begin + alph_size * sizeof(size_t);
+        select_table_pos_begin = AlignPos(select_table_pos_begin);
+
+        size_t occup_size = select_table_pos_begin + sizeof(size_t) * size;
+
+        return {std::move(symb_freq),  std::move(bv_sizes),    bv_pos_begin,
+                select_alph_pos_begin, select_table_pos_begin, occup_size};
     }
 
     template <typename NumberAccesstorT>
     WaveletTree(const NumberAccesstorT& text, size_t alph_size, const BuildInfo& build_info) {
         const auto& bv_sizes = build_info.GetBitVectorSizes();
         const auto num_bv = bv_sizes.size();
+
+        m_select_alph_pos_begin = build_info.GetSelectAlphPosBegin();
+        m_select_table_pos_begin = build_info.GetSelectTablePosBegin();
 
         // Init Decard tree with bit vectors positions
         size_t* bv_poss = GetBitVectorPoss();
@@ -133,16 +158,26 @@ public:
             new (GetBitVectorPtr(i)) BitVector{bv_sizes[i]};
         }
 
-        // Fill bit vectors
+        // Fill setect alph
+        size_t* select_alph = GetSelectAlph();
+        const auto& freq_table = build_info.GetSymbFreq();
+        select_alph[0] = m_select_table_pos_begin;
+        for (size_t i = 1; i < freq_table.size(); ++i) {
+            select_alph[i] = select_alph[i - 1] + freq_table[i - 1] * sizeof(size_t);
+        }
+
+        std::vector<size_t> in_sel_pos(freq_table.size());
+
+        // Fill bit vectors and select
         std::vector<size_t> in_bv_pos(num_bv);
 
         const auto num_levels = Log2Up(alph_size - 1);
         m_num_levels = num_levels;
         const auto text_size = text.Size();
         for (size_t i = 0; i < text_size; ++i) {
-            auto val = text[i];
-            size_t bit_pos = 1u << (m_num_levels - 1);
+            const auto val = text[i];
 
+            size_t bit_pos = 1u << (m_num_levels - 1);
             size_t i_bv = 0;
             for (size_t i_lvl = 0; i_lvl < num_levels; ++i_lvl) {
                 const bool bit = !!(val & bit_pos);
@@ -153,6 +188,8 @@ public:
 
                 i_bv = GetChildPos(i_bv, bit);
             }
+
+            GetSelectTable(val)[in_sel_pos[val]++] = i;
         }
 
         for (size_t i = 0; i < num_bv; ++i) {
@@ -194,45 +231,74 @@ public:
     // m_num_levels = 4
     // input: val = C***, signif_bit_len = 1
     // input: val = CA**, signif_bit_len = 2
-    size_t GetFirstRank(size_t val, u8 signif_bit_len, size_t pos) const {
+    // Res: {pos, is_finded}
+    std::pair<size_t, bool> GetFirstRank(size_t val, u8 signif_bit_len, size_t l_pos,
+                                         size_t r_pos) const {
         assert(signif_bit_len <= m_num_levels);
 
         size_t bit_pos = 1u << (m_num_levels - 1);
 
-        size_t i_bv = 0, rank = pos;
+        size_t val_path = 0;
+
+        size_t i_bv = 0, l_rank = l_pos, r_rank = r_pos;
         for (size_t i_lvl = 0; i_lvl < signif_bit_len; ++i_lvl) {
-            if (rank == 0) {
-                return 0;
+            if (l_rank == r_rank) {
+                return {};
             }
 
             const bool bit = !!(val & bit_pos);
             bit_pos >>= 1;
+            val_path = (val_path << 1) | bit;
 
             const auto& bv = GetBitVector(i_bv);
             if (bit) {
-                rank = bv.GetRank(rank);
+                l_rank = bv.GetRank(l_rank);
+                r_rank = bv.GetRank(r_rank);
             } else {
-                const auto y = bv.GetRank(rank);
-                rank = rank - bv.GetRank(rank);
+                l_rank = l_rank - bv.GetRank(l_rank);  // todo
+                r_rank = r_rank - bv.GetRank(r_rank);  // todo
             }
 
             i_bv = GetChildPos(i_bv, bit);
         }
-        
-        if (rank == 0) {
-            return 0;
+
+        if (l_rank == r_rank) {
+            return {};
         }
 
         for (size_t i_lvl = signif_bit_len; i_lvl < m_num_levels; ++i_lvl) {
             const auto& bv = GetBitVector(i_bv);
-            size_t zero_rank = rank - bv.GetRank(rank);
+            size_t l_one_rank = bv.GetRank(l_rank);
+            size_t r_one_rank = bv.GetRank(r_rank);
+
+            size_t l_zero_rank = l_rank - l_one_rank;
+            size_t r_zero_rank = r_rank - r_one_rank;
+
+            size_t zero_rank = r_zero_rank - l_zero_rank;
+
+            val_path <<= 1;
             if (zero_rank) {
-                rank = zero_rank;
+                l_rank = l_zero_rank;
+                r_rank = r_zero_rank;
+            } else {
+                l_rank = l_one_rank;
+                r_rank = r_one_rank;
+
+                val_path |= 1;
             }
             i_bv = GetChildPos(i_bv, zero_rank == 0);
         }
 
-        return rank;
+        if (l_rank == r_rank) {
+            return {};
+        }
+
+        return {Select(val_path, l_rank + 1), true};
+    }
+
+    // val - must exist, else UB
+    size_t Select(size_t val, size_t pos) const {
+        return GetSelectTable(val)[pos];
     }
 
     void Dump() const {
@@ -284,6 +350,22 @@ private:
         return *GetBitVectorPtr(node_pos);
     }
 
+    size_t* GetSelectAlph() noexcept {
+        return (size_t*)((u8*)this + m_select_alph_pos_begin);
+    }
+    const size_t* GetSelectAlph() const noexcept {
+        return (const size_t*)((const u8*)this + m_select_alph_pos_begin);
+    }
+
+    size_t* GetSelectTable(size_t val) noexcept {
+        return (size_t*)((u8*)this + GetSelectAlph()[val]);
+    }
+    const size_t* GetSelectTable(size_t val) const noexcept {
+        return (const size_t*)((const u8*)this + GetSelectAlph()[val]);
+    }
+
 private:
     size_t m_num_levels;
+    size_t m_select_alph_pos_begin;
+    size_t m_select_table_pos_begin;
 };

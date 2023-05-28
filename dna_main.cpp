@@ -255,6 +255,17 @@ int main_blocking_d() {
             auto right_dna_d1 = right_patt_buf_d1.GetAccessor();
             DnaSeqDataAccessor<d> right_pattern{right_dna_d1.data(), right_dna_d1.Size() / d};
 
+            /*
+                /^^\       /======\       /^^\
+                & -------- | TODO | -------- &
+                \__/       \======/       \__/
+                 ##                        ##
+                 ::                        ::
+                 ''                        ''
+
+                Fix find sa_pos_right when search is unalign ---v
+            */
+
             auto [pos, sa_pos, sa_pos_right, lcp] = sbt.Search(right_pattern, dna_data);
 
             bool is_finded = false;

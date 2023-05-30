@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <iostream>
+#include <future>
 
 #include "dna/dna.h"
 #include "dna/patricia_trie.h"
@@ -60,14 +61,6 @@ void BuildAllStructures(std::string dna_path) {
 
     NameGenerator name_gen{dna_path, block_size};
 
-    auto done = [] {
-        std::cout << "\ndone\n";
-    };
-
-    // 0) Zero Term
-    std::cout << "Make text zero terminated -> " << dna_path << std::endl;
-    MakeZeroTerminated(dna_path);
-
     // 1) Compr
     const auto& dna_compr_path = name_gen.GetCompressedTextPath();
     std::cout << "Build compressed dna text -> " << dna_compr_path << std::endl;
@@ -110,6 +103,7 @@ void BuildAllStructures(std::string dna_path) {
         std::cout << "Build wavelet tree -> " << wt_path << std::endl;
         WaveletTreeOnDisk::Build(wt_path, rev_num_dna, rev_num_alph_size);
     }
+    std::cout << std::endl;
 }
 
 int main_blocking_1() {
@@ -434,9 +428,30 @@ void print_num_leaves_arr() {
     (print_num_leaves<ds>(), ...);
 }
 
+constexpr bool enable_cache = false;
+
 int main() try {
-    BuildAllStructures<1>("../../data/T_SA/dna.1MB");
-    BuildAllStructures<2>("../../data/T_SA/dna.1MB");
+    if constexpr (!enable_cache) {
+        const std::string data_dir = "../../data/T_SA/";
+        const std::string data_size_arr[] = {"1KB", "1MB", "20MB", "100MB", "200MB"};
+
+        std::vector<std::future<void>> pull;
+        for (const auto& data_size : data_size_arr) {
+            std::string data_path = data_dir + "dna." + data_size;
+            MakeZeroTerminated(data_path);
+
+            auto build = [&]<u8... ds>{
+                (pull.emplace_back(std::async(BuildAllStructures<ds>, data_path)), ...);
+            };
+
+            build.template operator()<1, 2, 3, 4, 5, 6, 7, 8>();
+
+            for (auto& task : pull) {
+                task.get();
+            }
+            pull.clear();
+        }
+    }
 
     // constexpr u8 d = 4;
 

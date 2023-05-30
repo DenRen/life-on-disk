@@ -4,7 +4,7 @@
 
 #include <limits>
 
-constexpr inline bool SBT_BUILD_LOG = true;
+constexpr inline bool SBT_BUILD_LOG = false;
 
 namespace DNA_SBT {
 
@@ -194,7 +194,7 @@ StringBTree<CharT> StringBTree<CharT>::StringBTree::Build(std::string sbt_dest_p
     const blk_pos_t num_blocks = CalcCommonNumBlock(suff_arr_size);
     FileMapperWrite sbt_file{sbt_dest_path, num_blocks * g_block_size};
     auto [dest_data, dest_size] = sbt_file.GetData();
-    std::cout << "SBT file size: " << dest_size << std::endl;
+    // std::cout << "SBT file size: " << dest_size << std::endl;
 
     // Build leaves level
     const str_len_t num_strings = suff_arr_size;

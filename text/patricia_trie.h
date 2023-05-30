@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types.h"
-#include "../common/file_mapper.h"
+#include "../common/file_manip.h"
 #include "../common/help_func.h"
 
 #include <algorithm>

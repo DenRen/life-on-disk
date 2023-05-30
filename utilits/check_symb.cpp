@@ -2,7 +2,7 @@
 #include <string>
 #include <array>
 
-#include "../src/file_mapper.h"
+#include "../src/file_manip.h"
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {

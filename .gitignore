@@ -37,3 +37,4 @@ src/btree.bin
 *.dot
 utilits/check_symb
 text_main.cpp
+*.ods#

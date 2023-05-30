@@ -4,7 +4,7 @@
 #include <utility>
 #include <iostream>
 
-#include "../common/file_mapper.h"
+#include "../common/file_manip.h"
 #include "types.h"
 
 inline bool operator<(DnaSymb lhs, DnaSymb rhs) noexcept {
@@ -125,4 +125,48 @@ public:
 private:
     const u8* m_dna_data_begin;
     uint64_t m_num_dna;
+};
+
+template <u8 d>
+std::size_t DnaSeq2Number(const DnaSymbSeq<d>& dna_seq) noexcept {
+    std::size_t value = 0;
+    for (u8 i = 0; i < d; ++i) {
+        value = 8 * value + (u8)dna_seq[i];
+    }
+    return value;
+}
+
+template <u8 d>
+std::size_t DnaSeq2RevNumber(const DnaSymbSeq<d>& dna_seq) noexcept {
+    std::size_t value = 0;
+    for (u8 i = 0; i < d; ++i) {
+        value = 8 * value + (u8)dna_seq[d - 1 - i];
+    }
+    return value;
+}
+
+template <u8 d>
+class ReverseBWTDnaSeqAccessor {
+public:
+    ReverseBWTDnaSeqAccessor(const DnaSeqDataAccessor<d>& dna, const str_pos_t* suff_arr)
+        : m_dna{dna}
+        , m_suff_arr{suff_arr} {}
+
+    std::size_t operator[](str_pos_t pos) const noexcept {
+        // BWT
+        pos = m_suff_arr[pos];
+        pos = pos ? pos - 1 : m_dna.Size() - 1;
+
+        // Convert to reverse number
+        return DnaSeq2RevNumber(m_dna[pos]);
+        // return DnaSeq2Number(m_dna[pos]);
+    }
+
+    str_len_t Size() const noexcept {
+        return m_dna.Size();
+    }
+
+private:
+    DnaSeqDataAccessor<d> m_dna;
+    const str_pos_t* m_suff_arr;
 };

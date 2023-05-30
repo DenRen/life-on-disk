@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../wavelet_tree/wavelet_tree.hpp"
-#include "../common/file_mapper.h"
+#include "../common/file_manip.h"
 
 #include <string>
 

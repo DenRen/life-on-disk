@@ -63,7 +63,7 @@ class StringBTree {
         return 2 * pt_ext_size /
                (NodeSectionsSize<IsLeafV, 6>::common - NodeSectionsSize<IsLeafV, 4>::common);
     }
-
+public:
     template <bool IsLeafV>
     PACKED_STRUCT Node : public NodeBase {
         Node() noexcept

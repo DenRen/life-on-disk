@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <string>
 
-#include "../common/file_mapper.h"
+#include "../common/file_manip.h"
 #include "../dna/dna.h"
 
 #include <algorithm>

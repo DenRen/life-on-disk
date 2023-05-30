@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../common/file_mapper.h"
+#include "../common/file_manip.h"
 #include "../common/help_func.h"
 #include "dna.h"
 

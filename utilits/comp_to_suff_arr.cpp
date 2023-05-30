@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
 
     uint d = 0;
     if (sscanf(argv[2], "%u", &d) != 1) {
-        throw std::invalid_argument{"Incorrect blockung parameter"};
+        throw std::invalid_argument{"Incorrect blocking parameter"};
     }
 
     std::string suff_arr_path = std::string{comp_dna_path} + ".sa";

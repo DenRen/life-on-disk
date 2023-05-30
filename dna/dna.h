@@ -57,7 +57,7 @@ ObjectFileHolder BuildCompressedDnaFromTextDna(std::string_view text_dna_path,
                                                std::string_view compressed_dna_path,
                                                uint d_max = 1);
 
-ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna_path,
+ObjectFileHolder BuildSuffArrayFromComprDna(std::string_view compressed_dna_path,
                                                  std::string_view suff_arr_path, uint d = 1);
 
 // Not garantee, that [Size() - 1] == TERM

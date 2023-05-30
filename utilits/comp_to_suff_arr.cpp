@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     std::cout << "SA path: " << suff_arr_path << std::endl;
 
     std::cout << "SA building started" << std::endl;
-    auto dna_sa_file_holder = BuildSuffArrayFromCompressedDna(comp_dna_path, suff_arr_path, d);
+    auto dna_sa_file_holder = BuildSuffArrayFromComprDna(comp_dna_path, suff_arr_path, d);
     const uint32_t* sa = (const uint32_t*)dna_sa_file_holder.cbegin();
     const uint32_t sa_size = dna_sa_file_holder.Size();
     std::cout << "SA building finished" << std::endl;

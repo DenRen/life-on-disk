@@ -174,7 +174,7 @@ static int DnaSymbSeq2Int(const DnaDataAccessor& dna, uint i_begin, uint d) {
     return res;
 }
 
-ObjectFileHolder BuildSuffArrayFromCompressedDna(std::string_view compressed_dna_path,
+ObjectFileHolder BuildSuffArrayFromComprDna(std::string_view compressed_dna_path,
                                                  std::string_view suff_arr_path, uint d) {
     if (d < 1) {
         throw std::runtime_error{"d_max must be >= 1"};

@@ -309,10 +309,15 @@ void PatriciaTrieNaive<CharT>::Insert(const AccessorT& dna, str_pos_t dna_pos,
     if (it == branchs.end()) {
         branchs.insert({dna[dna_pos + lcp], new_leaf});
     } else {
-        InnerNode* new_inn_node = new InnerNode{lcp};
-        new_inn_node->childs.emplace(dna[dna_pos + lcp], new_leaf);
-        new_inn_node->childs.emplace(symb_old, it->second);
-        it->second = new_inn_node;
+        const auto symb = dna[dna_pos + lcp];
+        if (symb != symb_old) {
+            InnerNode* new_inn_node = new InnerNode{lcp};
+            new_inn_node->childs.emplace(symb, new_leaf);
+            new_inn_node->childs.emplace(symb_old, it->second);
+            it->second = new_inn_node;
+        } else {
+            delete (LeafNode*)new_leaf;
+        }
     }
 }
 

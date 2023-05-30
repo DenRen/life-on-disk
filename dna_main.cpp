@@ -6,12 +6,113 @@
 #include "dna/string_btree.h"
 #include "dna/wavelet_tree_on_disk.hpp"
 
-int main_blocking_1() {
-    // std::cout << SBT::InnerNode::num_leaves << std::endl;
-    // std::cout << SBT::LeafNode::num_leaves << std::endl;
-    // std::cout << sizeof(SBT::InnerNode) << std::endl;
-    // std::cout << sizeof(SBT::LeafNode) << std::endl;
+/*
+    0) Text
+    1) Compressed Text, SA
+    2) SBT или {SBT, WT}
+*/
 
+void CheckBlockSize(u8 block_size) {
+    if (block_size == 0) {
+        throw std::invalid_argument{"Block size \"d\" must be greater 0"};
+    }
+}
+
+class NameGenerator {
+public:
+    NameGenerator(std::string text_path, u8 block_size /* d */)
+        : m_compressed_text{text_path + ".comp"}
+        , m_suffix_array{m_compressed_text + ".sa"}
+        , m_string_btree{m_compressed_text + ".sbt"}
+        , m_wavelet_tree{m_compressed_text + ".wt"} {
+        CheckBlockSize(block_size);
+        if (block_size > 1) {
+            auto block_size_ext = ".d" + std::to_string(block_size);
+            m_suffix_array += block_size_ext;
+            m_string_btree += block_size_ext;
+            m_wavelet_tree += block_size_ext;
+        }
+    }
+
+    const std::string& GetCompressedTextPath() const noexcept {
+        return m_compressed_text;
+    }
+    const std::string& GetSuffixArrayPath() const noexcept {
+        return m_suffix_array;
+    }
+    const std::string& GetStringBTreePath() const noexcept {
+        return m_string_btree;
+    }
+    const std::string& GetWaveletTreePath() const {
+        return m_wavelet_tree;
+    }
+
+private:
+    std::string m_compressed_text;
+    std::string m_suffix_array;
+    std::string m_string_btree;
+    std::string m_wavelet_tree;
+};
+
+template <u8 block_size>
+void BuildAllStructures(std::string dna_path) {
+    CheckBlockSize(block_size);
+
+    NameGenerator name_gen{dna_path, block_size};
+
+    auto done = [] {
+        std::cout << "\ndone\n";
+    };
+
+    // 0) Zero Term
+    std::cout << "Make text zero terminated -> " << dna_path << std::endl;
+    MakeZeroTerminated(dna_path);
+
+    // 1) Compr
+    const auto& dna_compr_path = name_gen.GetCompressedTextPath();
+    std::cout << "Build compressed dna text -> " << dna_compr_path << std::endl;
+    BuildCompressedDnaFromTextDna(dna_path, dna_compr_path, block_size);
+
+    // 2) SA
+    const auto& suff_arr_path = name_gen.GetSuffixArrayPath();
+    std::cout << "Build suffix array -> " << suff_arr_path << std::endl;
+    BuildSuffArrayFromComprDna(dna_compr_path, suff_arr_path, block_size);
+
+    const auto& sbt_path = name_gen.GetStringBTreePath();
+    if constexpr (block_size == 1) {
+        using SbtT = DNA_SBT::StringBTree<DnaSymb>;
+        ObjectFileHolder dna_file_holder{dna_compr_path};
+        DnaDataAccessor dna{dna_file_holder};
+
+        std::cout << "Build string b-tree -> " << sbt_path << std::endl;
+        SbtT::Build(sbt_path, dna, suff_arr_path);
+    } else {
+        using SbtT = DNA_SBT::StringBTree<DnaSymbSeq<block_size>>;
+
+        ObjectFileHolder dna_file_holder{dna_compr_path};
+        DnaSeqDataAccessor<block_size> dna{dna_file_holder};
+
+        if (auto sa_size = ObjectFileHolder{suff_arr_path}.Size(); sa_size != dna.Size()) {
+            throw std::runtime_error{"Incorrect size of SA and DNA: " + std::to_string(sa_size) +
+                                     " != " + std::to_string(dna.Size())};
+        }
+
+        std::cout << "Build string b-tree -> " << sbt_path << std::endl;
+        SbtT::Build(sbt_path, dna, suff_arr_path);
+
+        ObjectFileHolder suff_arr_holder{suff_arr_path};
+        const str_pos_t* suff_arr = (const str_pos_t*)suff_arr_holder.cbegin();
+
+        ReverseBWTDnaSeqAccessor rev_num_dna{dna, suff_arr};
+        const std::size_t rev_num_alph_size = std::pow(8, block_size);
+
+        const auto& wt_path = name_gen.GetWaveletTreePath();
+        std::cout << "Build wavelet tree -> " << wt_path << std::endl;
+        WaveletTreeOnDisk::Build(wt_path, rev_num_dna, rev_num_alph_size);
+    }
+}
+
+int main_blocking_1() {
     std::string btree_name = "dna_btree.bin";
     const std::string data_dir = "../../data/T_SA/";
     const char* data_size_arr[] = {"1Kb", "1Mb", "20MB", "100MB", "200MB"};
@@ -20,7 +121,6 @@ int main_blocking_1() {
 
     const char* data_size = data_size_arr[1];
     std::string dna_data_path = data_dir + "dna." + data_size + ".comp";
-    // std::string dna_data_path = data_dir + "micro.comp";
     std::string dna_data_sa_path = dna_data_path + ".sa";
     std::string sbt_bin_path = btree_name + '.' + data_size;
 
@@ -88,50 +188,6 @@ int main_blocking_1() {
 }
 
 template <u8 d>
-std::size_t DnaSeq2Number(const DnaSymbSeq<d>& dna_seq) noexcept {
-    std::size_t value = 0;
-    for (u8 i = 0; i < d; ++i) {
-        value = 8 * value + (u8)dna_seq[i];
-    }
-    return value;
-}
-
-template <u8 d>
-std::size_t DnaSeq2RevNumber(const DnaSymbSeq<d>& dna_seq) noexcept {
-    std::size_t value = 0;
-    for (u8 i = 0; i < d; ++i) {
-        value = 8 * value + (u8)dna_seq[d - 1 - i];
-    }
-    return value;
-}
-
-template <u8 d>
-class ReverseBWTDnaSeqAccessor {
-public:
-    ReverseBWTDnaSeqAccessor(const DnaSeqDataAccessor<d>& dna, const str_pos_t* suff_arr)
-        : m_dna{dna}
-        , m_suff_arr{suff_arr} {}
-
-    std::size_t operator[](str_pos_t pos) const noexcept {
-        // BWT
-        pos = m_suff_arr[pos];
-        pos = pos ? pos - 1 : m_dna.Size() - 1;
-
-        // Convert to reverse number
-        return DnaSeq2RevNumber(m_dna[pos]);
-        // return DnaSeq2Number(m_dna[pos]);
-    }
-
-    str_len_t Size() const noexcept {
-        return m_dna.Size();
-    }
-
-private:
-    DnaSeqDataAccessor<d> m_dna;
-    const str_pos_t* m_suff_arr;
-};
-
-template <u8 d>
 std::tuple<DnaSymbSeq<d>, DnaBuffer, std::size_t> GetLeftRightPattern(const std::string& str,
                                                                       std::size_t k) {
     assert(k < d);
@@ -177,11 +233,6 @@ std::tuple<DnaSymbSeq<d>, DnaBuffer, std::size_t> GetLeftRightPattern(const std:
 
 template <u8 d>
 int main_blocking_d() {
-    // std::cout << SBT::InnerNode::num_leaves << std::endl;
-    // std::cout << SBT::LeafNode::num_leaves << std::endl;
-    // std::cout << sizeof(SBT::InnerNode) << std::endl;
-    // std::cout << sizeof(SBT::LeafNode) << std::endl;
-
     std::string btree_name = "dna_btree.bin";
     const std::string data_dir = "../../data/T_SA/";
     const char* data_size_arr[] = {"1KB", "1MB", "20MB", "100MB", "200MB"};
@@ -227,14 +278,14 @@ int main_blocking_d() {
     const std::size_t rev_num_alph_size = std::pow(8, d);
 
     std::cout << "WT building started\n";
+#define CACHE_WT
+#ifndef CACHE_WT
     auto wt_file = WaveletTreeOnDisk::Build("wt_tree.20MB", rev_num_dna_data, rev_num_alph_size);
+#else
+    const auto& wt_file = WaveletTreeOnDisk{"wt_tree.20MB"};
+#endif
     const auto& wt = wt_file.Get();
-    
-    // auto build_info = WaveletTree::PrepareBuild(rev_num_dna_data, rev_num_alph_size);
-    // std::cout << "WT occup size: " << build_info.CalcOccupiedSize() << std::endl;
-    // std::vector<u8> mapped_buf(build_info.CalcOccupiedSize());
-    // auto& wt =
-    //     *new (mapped_buf.data()) WaveletTree{rev_num_dna_data, rev_num_alph_size, build_info};
+
     std::cout << "WT building finished\n\n";
 
     while (true) {
@@ -285,7 +336,7 @@ int main_blocking_d() {
             std::cout << "left_pattern: " << left_pattern << std::endl;
             const auto left_pattern_num = DnaSeq2Number(left_pattern);
             auto [res_pos, is_rank_finded] =
-                wt.GetFirstRank(left_pattern_num, 3 * k, sa_pos, sa_pos_right);
+                wt.GetFirstRank(left_pattern_num, 3 /* bits */ * k, sa_pos, sa_pos_right);
 
             if (!is_rank_finded) {
                 std::cout << "WT: rank not found\n";
@@ -303,8 +354,7 @@ int main_blocking_d() {
             std::cout << "pos: " << res_pos << std::endl;
 
             std::cout << "SYMB: " << dna_data[suff_arr[res_pos] - 1] << '\''
-                      << dna_data[suff_arr[res_pos] + 0]
-                      << '\'' << dna_data[suff_arr[res_pos] + 1]
+                      << dna_data[suff_arr[res_pos] + 0] << '\'' << dna_data[suff_arr[res_pos] + 1]
                       << std::endl;
 
             // std::cout << "SYMB: " << dna_data[suff_arr[res_pos] + 0] << '\''
@@ -354,7 +404,7 @@ int main_blocking_d() {
             } else {
                 std::cout << "not found" << std::endl;
             }
-            std::cout << std::endl;  // AGCGATGGGA
+            std::cout << std::endl;
 
             if (is_finded) {
                 break;
@@ -365,14 +415,36 @@ int main_blocking_d() {
     return 0;
 }
 
-int main() try {
-    constexpr u8 d = 4;
-
+template <u8 d>
+void print_num_leaves() {
+    std::cout << (int)d << std::endl;
     if constexpr (d == 1) {
-        return main_blocking_1();
+        using SbtT = DNA_SBT::StringBTree<DnaSymb>;
+        std::cout << '\t' << SbtT::InnerNode::num_leaves << std::endl;
+        std::cout << '\t' << SbtT::LeafNode::num_leaves << std::endl;
     } else {
-        return main_blocking_d<d>();
+        using SbtT = DNA_SBT::StringBTree<DnaSymbSeq<d>>;
+        std::cout << '\t' << SbtT::InnerNode::num_leaves << std::endl;
+        std::cout << '\t' << SbtT::LeafNode::num_leaves << std::endl;
     }
+}
+
+template <u8... ds>
+void print_num_leaves_arr() {
+    (print_num_leaves<ds>(), ...);
+}
+
+int main() try {
+    BuildAllStructures<1>("../../data/T_SA/dna.1MB");
+    BuildAllStructures<2>("../../data/T_SA/dna.1MB");
+
+    // constexpr u8 d = 4;
+
+    // if constexpr (d == 1) {
+    //     return main_blocking_1();
+    // } else {
+    //     return main_blocking_d<d>();
+    // }
 
 } catch (std::exception& exc) {
     std::cerr << "Exception: " << exc.what() << std::endl;

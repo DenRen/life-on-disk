@@ -11,7 +11,7 @@
 
 class FileDescGuard {
 public:
-    FileDescGuard(int fd) noexcept
+    explicit FileDescGuard(int fd) noexcept
         : m_fd{fd} {}
 
     ~FileDescGuard() {
@@ -38,6 +38,7 @@ void* MapFile(const FileDescGuard& fd_guard, size_t size, int prot, int flags);
 uint64_t GetFileSizeAndSetToBegin(const FileDescGuard& fd_guard);
 uint64_t Lseek64(const FileDescGuard& fd_guard, uint64_t offset, int whence);
 void TruncateFile(const FileDescGuard& fd_guard, uint64_t new_size);
+void MakeZeroTerminated(std::string_view text_path);
 
 class FileMapperRead {
 public:
@@ -83,5 +84,5 @@ public:
 private:
     u8* m_data;
     uint64_t m_size;
-    int m_fd;
+    FileDescGuard m_fd;
 };

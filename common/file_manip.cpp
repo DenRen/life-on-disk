@@ -11,7 +11,7 @@ FileDescGuard OpenFile(std::string_view path, int flags) {
         perror("open64");
         throw std::runtime_error("Failed to open file: " + std::string{path});
     }
-    return fd;
+    return FileDescGuard{fd};
 }
 
 FileDescGuard OpenFile(std::string_view path, int flags, int opts) {
@@ -20,7 +20,7 @@ FileDescGuard OpenFile(std::string_view path, int flags, int opts) {
         perror("open64");
         throw std::runtime_error("Failed to open file: " + std::string{path});
     }
-    return fd;
+    return FileDescGuard{fd};
 }
 
 void* MapFile(const FileDescGuard& fd_guard, size_t size, int prot, int flags) {
@@ -57,10 +57,30 @@ void TruncateFile(const FileDescGuard& fd_guard, uint64_t new_size) {
     }
 }
 
+void MakeZeroTerminated(std::string_view text_path) {
+    FileDescGuard fd_guard = OpenFile(text_path, O_RDWR);
+
+    uint64_t file_size = GetFileSizeAndSetToBegin(fd_guard);
+
+    char last_char = 0;
+    if (read(fd_guard.Get(), &last_char, 1) != 1) {
+        throw std::runtime_error{"Read last symb failed"};
+    }
+
+    if (last_char != '\0') {
+        TruncateFile(fd_guard, file_size + 1);
+
+        last_char = '\0';
+        if (write(fd_guard.Get(), &last_char, 1) != 1) {
+            throw std::runtime_error{"Failed to write zero terminated byte"};
+        }
+    }
+}
+
 FileMapperRead::FileMapperRead(std::string_view path) {
     FileDescGuard fd_guard = OpenFile(path, O_RDONLY);
-    m_size = GetFileSizeAndSetToBegin(fd_guard.Get());
-    m_data = (const char*)MapFile(fd_guard.Get(), m_size, PROT_READ, MAP_PRIVATE);
+    m_size = GetFileSizeAndSetToBegin(fd_guard);
+    m_data = (const char*)MapFile(fd_guard, m_size, PROT_READ, MAP_PRIVATE);
     fd_guard.Release();
 }
 
@@ -69,17 +89,13 @@ FileMapperRead::~FileMapperRead() {
 }
 
 FileMapperWrite::FileMapperWrite(std::string_view path, std::size_t size)
-    : m_size{size} {
-    FileDescGuard fd_guard = OpenFile(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-
-    TruncateFile(fd_guard, m_size);
+    : m_size{size}
+    , m_fd{OpenFile(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR)} {
+    TruncateFile(m_fd, m_size);
     m_data = (u8*)MapFile(m_fd, m_size, PROT_WRITE, MAP_SHARED);
-
-    fd_guard.Release();
 }
 
 FileMapperWrite::~FileMapperWrite() {
-    close(m_fd);
     if (m_data != nullptr) {
         munmap((void*)m_data, m_size);
     }

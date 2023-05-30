@@ -4,7 +4,7 @@
 #include "dna/dna.h"
 #include "dna/patricia_trie.h"
 #include "dna/string_btree.h"
-#include "wavelet_tree/wavelet_tree.hpp"
+#include "dna/wavelet_tree_on_disk.hpp"
 
 int main_blocking_1() {
     // std::cout << SBT::InnerNode::num_leaves << std::endl;
@@ -188,7 +188,7 @@ int main_blocking_d() {
 
     const str_len_t max_print_len = 25 / 2;
 
-    const char* data_size = data_size_arr[1];
+    const char* data_size = data_size_arr[2];
     std::string dna_data_path = data_dir + "dna." + data_size + ".comp";
     // std::string dna_data_path = data_dir + "micro.comp";
     std::string dna_data_sa_path = dna_data_path + ".sa.d" + std::to_string(d);
@@ -227,15 +227,15 @@ int main_blocking_d() {
     const std::size_t rev_num_alph_size = std::pow(8, d);
 
     std::cout << "WT building started\n";
-    auto build_info = WaveletTree::PrepareBuild(rev_num_dna_data, rev_num_alph_size);
-    std::cout << "WT occup size: " << build_info.CalcOccupiedSize() << std::endl;
-    std::vector<u8> mapped_buf(build_info.CalcOccupiedSize());
-    auto& wt =
-        *new (mapped_buf.data()) WaveletTree{rev_num_dna_data, rev_num_alph_size, build_info};
-    const auto& symb_freq = build_info.GetSymbFreq();
-    std::cout << "WT building finished\n";
-
-    std::cout << std::endl;
+    auto wt_file = WaveletTreeOnDisk::Build("wt_tree.20MB", rev_num_dna_data, rev_num_alph_size);
+    const auto& wt = wt_file.Get();
+    
+    // auto build_info = WaveletTree::PrepareBuild(rev_num_dna_data, rev_num_alph_size);
+    // std::cout << "WT occup size: " << build_info.CalcOccupiedSize() << std::endl;
+    // std::vector<u8> mapped_buf(build_info.CalcOccupiedSize());
+    // auto& wt =
+    //     *new (mapped_buf.data()) WaveletTree{rev_num_dna_data, rev_num_alph_size, build_info};
+    std::cout << "WT building finished\n\n";
 
     while (true) {
         std::string str;
@@ -249,26 +249,15 @@ int main_blocking_d() {
             continue;
         }
 
-        for (std::size_t k = 2; k < d; ++k) {
+        bool is_finded = false;
+        for (std::size_t k = 1; k < d; ++k) {
             auto [left_pattern, right_patt_buf_d1, num_term_symb] = GetLeftRightPattern<d>(str, k);
 
             auto right_dna_d1 = right_patt_buf_d1.GetAccessor();
             DnaSeqDataAccessor<d> right_pattern{right_dna_d1.data(), right_dna_d1.Size() / d};
 
-            /*
-                /^^\       /======\       /^^\
-                & -------- | TODO | -------- &
-                \__/       \======/       \__/
-                 ##                        ##
-                 ::                        ::
-                 ''                        ''
-
-                Fix find sa_pos_right when search is unalign ---v
-            */
-
             auto [pos, sa_pos, sa_pos_right, lcp] = sbt.Search(right_pattern, dna_data);
 
-            bool is_finded = false;
             if (num_term_symb == 0) {
                 is_finded = lcp == right_pattern.Size();
             } else {
@@ -314,7 +303,8 @@ int main_blocking_d() {
             std::cout << "pos: " << res_pos << std::endl;
 
             std::cout << "SYMB: " << dna_data[suff_arr[res_pos] - 1] << '\''
-                      << dna_data[suff_arr[res_pos] + 0] << '\'' << dna_data[suff_arr[res_pos] + 1]
+                      << dna_data[suff_arr[res_pos] + 0]
+                      << '\'' << dna_data[suff_arr[res_pos] + 1]
                       << std::endl;
 
             // std::cout << "SYMB: " << dna_data[suff_arr[res_pos] + 0] << '\''
@@ -329,7 +319,6 @@ int main_blocking_d() {
             // std::cout << "num_term_symb: " << num_term_symb << std::endl;
             // std::cout << "lcp: " << lcp << std::endl;
             if (is_finded) {
-                // if (1 || lcp == right_pattern.Size()) {
                 str_len_t answer_len = dna_data.Size() - pos;
                 str_len_t len = std::min(answer_len, max_print_len);
 
@@ -361,12 +350,15 @@ int main_blocking_d() {
                     throw std::runtime_error{"Incorrect SA index!"};
                 }
 
+                break;
             } else {
                 std::cout << "not found" << std::endl;
             }
             std::cout << std::endl;  // AGCGATGGGA
 
-            break;
+            if (is_finded) {
+                break;
+            }
         }
     }
 

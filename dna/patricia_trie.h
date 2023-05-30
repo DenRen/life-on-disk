@@ -594,7 +594,7 @@ std::pair<in_blk_pos_t, bool> PT<CharT>::RSearch(const AccessorT& pattern, const
                 cur_len = dna.StrSize(str_pos);
             }
         } else {
-            throw std::runtime_error{"Some error"};
+            return {0, true};
         }
     }
 

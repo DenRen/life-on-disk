@@ -441,7 +441,6 @@ std::tuple<str_pos_t, str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Searc
     }
 
     bool is_right_finded = false;
-    // str_pos_t
 
     auto correct_ext_pos = [](in_blk_pos_t& ext_pos, in_blk_pos_t ext_begin) {
         using ExtItemT = typename InnerNode::ExtItemT;
@@ -470,14 +469,18 @@ std::tuple<str_pos_t, str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Searc
         cur_lcp = lcp;
 
         /*
-                            /        /--------\        \
-                            &------- |REFACTOR| -------&
-                            \        \--------/        /
+            /^^\       /======\       /^^\
+            & -------- | TODO | -------- &
+            \__/       \======/       \__/
+             ##                        ##
+             ::                        ::
+             ''                        ''
+
+            Fix find sa_pos_right when search is unalign ---v
         */
 
-        if (!is_right_finded && lcp == pattern.Size()) {
-            std::cout << "R calc ---------------------------------->\n";
-            is_right_finded = true;
+        if (!is_right_finded && lcp + 1 >= pattern.Size()) {
+            is_right_finded = lcp == pattern.Size();
 
             auto [right_ext_pos, is_rightmost] =
                 PT_T::RSearch(pattern, pt_root, lcp, ext_begin, dna);
@@ -506,7 +509,7 @@ std::tuple<str_pos_t, str_pos_t, str_pos_t, str_len_t> StringBTree<CharT>::Searc
                 // R
                 sbt_node_base = GetNodeBase(ext_item.child);
             } else {
-                throw std::runtime_error{""};
+                throw std::runtime_error{"Internal error"};
             }
         } else {
             str_pos = pt.GetStr(ext_pos);

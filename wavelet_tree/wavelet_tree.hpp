@@ -19,8 +19,8 @@ class WaveletTreeNaive {
 public:
     using size_t = uint32_t;
 
-    template <typename NumberAccesstorT>
-    WaveletTreeNaive(const NumberAccesstorT& text) {
+    template <typename NumberAccessorT>
+    WaveletTreeNaive(const NumberAccessorT& text) {
         const auto text_size = text.Size();
         m_buf.resize(text_size);
         for (size_t i = 0; i < text_size; ++i) {
@@ -92,8 +92,8 @@ public:
         size_t m_occup_size;
     };
 
-    template <typename NumberAccesstorT>
-    static BuildInfo PrepareBuild(const NumberAccesstorT& text, size_t alph_size) {
+    template <typename NumberAccessorT>
+    static BuildInfo PrepareBuild(const NumberAccessorT& text, size_t alph_size) {
         const auto size = text.Size();
 
         const auto num_levels = Log2Up(alph_size - 1);
@@ -136,8 +136,8 @@ public:
                 select_alph_pos_begin, select_table_pos_begin, occup_size};
     }
 
-    template <typename NumberAccesstorT>
-    WaveletTree(const NumberAccesstorT& text, size_t alph_size, const BuildInfo& build_info) {
+    template <typename NumberAccessorT>
+    WaveletTree(const NumberAccessorT& text, size_t alph_size, const BuildInfo& build_info) {
         const auto& bv_sizes = build_info.GetBitVectorSizes();
         const auto num_bv = bv_sizes.size();
 
@@ -293,7 +293,8 @@ public:
             return {};
         }
 
-        return {Select(val_path, l_rank + 1), true};
+        size_t res_pos = Select(val_path, l_rank + 1);
+        return {res_pos, res_pos < r_pos};
     }
 
     // val - must exist, else UB

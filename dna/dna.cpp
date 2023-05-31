@@ -175,7 +175,7 @@ static int DnaSymbSeq2Int(const DnaDataAccessor& dna, uint i_begin, uint d) {
 }
 
 ObjectFileHolder BuildSuffArrayFromComprDna(std::string_view compressed_dna_path,
-                                                 std::string_view suff_arr_path, uint d) {
+                                            std::string_view suff_arr_path, uint d) {
     if (d < 1) {
         throw std::runtime_error{"d_max must be >= 1"};
     }
@@ -251,12 +251,30 @@ DnaBuffer::DnaBuffer(std::string_view dna_str)
     m_dna_buf.resize(DivUp(m_num_dna * DnaSymbBitSize, 8));
     uint8_t* dest_data_begin = m_dna_buf.data();
 
-    for (uint32_t i = 0; i < dna_str.size(); ++i) {
+    for (str_pos_t i = 0; i < dna_str.size(); ++i) {
         auto [dna_symb, is_dna_symb] = ConvertTextDnaSymb2DnaSymb(dna_str[i]);
         if (!is_dna_symb) {
             throw std::invalid_argument{"DNA string have invalid symbol"};
         }
 
         InsertDnaSymb(dest_data_begin, i, dna_symb);
+    }
+
+    for (str_pos_t i = dna_str.size(); i < m_dna_buf.size(); ++i) {
+        InsertDnaSymb(dest_data_begin, i, DnaSymb::TERM);
+    }
+}
+
+DnaBuffer::DnaBuffer(const DnaDataAccessor& dna, str_pos_t begin, str_pos_t end)
+    : m_num_dna{end - begin} {
+    m_dna_buf.resize(DivUp(m_num_dna * DnaSymbBitSize, 8));
+    uint8_t* dest_data_begin = m_dna_buf.data();
+
+    for (str_pos_t i = 0; i < m_num_dna; ++i) {
+        InsertDnaSymb(dest_data_begin, i, dna[begin + i]);
+    }
+
+    for (str_pos_t i = m_num_dna; i < m_dna_buf.size(); ++i) {
+        InsertDnaSymb(dest_data_begin, i, DnaSymb::TERM);
     }
 }

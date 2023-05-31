@@ -86,6 +86,7 @@ private:
 class DnaBuffer {
 public:
     DnaBuffer(std::string_view dna_str);
+    DnaBuffer(const DnaDataAccessor& dna, str_pos_t begin, str_pos_t end);
 
     DnaDataAccessor GetAccessor() const noexcept {
         return {m_dna_buf.data(), m_num_dna};

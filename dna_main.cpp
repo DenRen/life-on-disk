@@ -497,10 +497,7 @@ std::string DnaSeq2String(const DnaDataAccessor& dna, str_pos_t begin, str_pos_t
 }
 
 template <u8 block_size>
-void little_lab(unsigned num_queries, unsigned data_size_index) {
-    const str_len_t pattern_len_min = 10;
-    const str_len_t pattern_len_max = 30;
-
+void little_lab(unsigned num_queries, unsigned data_size_index, str_len_t pattern_len) {
     auto uncompr_data_path = GetDataPath(data_size_arr[data_size_index]);
     NameGenerator name_gen{uncompr_data_path, block_size};
 
@@ -517,9 +514,6 @@ void little_lab(unsigned num_queries, unsigned data_size_index) {
     const str_len_t seed = 0xEDA + 0xDED * 32;
     std::mt19937_64 gen{seed};
 
-    using UniDistT = std::uniform_int_distribution<str_len_t>;
-    UniDistT pattern_len_distrib{pattern_len_min, pattern_len_max};
-    const str_len_t pattern_len = pattern_len_distrib(gen);
     std::cout << "pattern_len: " << pattern_len << std::endl;
 
     std::vector<DnaBuffer> patterns;
@@ -528,6 +522,7 @@ void little_lab(unsigned num_queries, unsigned data_size_index) {
     std::vector<std::string> patterns_str;
     patterns_str.reserve(num_queries);
 
+    using UniDistT = std::uniform_int_distribution<str_pos_t>;
     UniDistT pos_distrib{0, (str_len_t)dna_data.Size() - pattern_len - 1};
     for (unsigned i = 0; i < num_queries; ++i) {
         const auto pos = pos_distrib(gen);
@@ -647,31 +642,32 @@ int main(int argc, char* argv[]) try {
     int block_size_input = atoi(argv[1]);
     unsigned num_queries = 0;
     unsigned data_size_index = atoi(argv[2]);
+    str_len_t pattern_len = 320;
 
     switch (block_size_input) {
         case 1: {
-            little_lab::little_lab<1>(num_queries, data_size_index);
+            little_lab::little_lab<1>(num_queries, data_size_index, pattern_len);
         } break;
         case 2: {
-            little_lab::little_lab<2>(num_queries, data_size_index);
+            little_lab::little_lab<2>(num_queries, data_size_index, pattern_len);
         } break;
         case 3: {
-            little_lab::little_lab<3>(num_queries, data_size_index);
+            little_lab::little_lab<3>(num_queries, data_size_index, pattern_len);
         } break;
         case 4: {
-            little_lab::little_lab<4>(num_queries, data_size_index);
+            little_lab::little_lab<4>(num_queries, data_size_index, pattern_len);
         } break;
         case 5: {
-            little_lab::little_lab<5>(num_queries, data_size_index);
+            little_lab::little_lab<5>(num_queries, data_size_index, pattern_len);
         } break;
         case 6: {
-            little_lab::little_lab<6>(num_queries, data_size_index);
+            little_lab::little_lab<6>(num_queries, data_size_index, pattern_len);
         } break;
         case 7: {
-            little_lab::little_lab<7>(num_queries, data_size_index);
+            little_lab::little_lab<7>(num_queries, data_size_index, pattern_len);
         } break;
         case 8: {
-            little_lab::little_lab<8>(num_queries, data_size_index);
+            little_lab::little_lab<8>(num_queries, data_size_index, pattern_len);
         } break;
         default: {
             throw std::runtime_error{"Incorrect block size"};

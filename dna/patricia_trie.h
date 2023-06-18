@@ -524,7 +524,7 @@ typename PT<CharT>::SearchResult PT<CharT>::Search(const AccessorT& pattern, con
             }
         }
     } else {  // Hit node is leaf
-        if (lcp == node->len) {
+        if (lcp == dna.StrSize(str_pos)) {
             ext_pos = hit_node_pos;
         } else {
             CharT pat_symb = pattern[lcp];

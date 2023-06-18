@@ -269,12 +269,12 @@ int main_blocking_d() {
     ObjectFileHolder suff_arr_holder{dna_data_sa_path};
     const str_pos_t* suff_arr = (const str_pos_t*)suff_arr_holder.cbegin();
 
-    ReverseBWTDnaSeqAccessor rev_num_dna_data{dna_data, suff_arr};
-    const std::size_t rev_num_alph_size = std::pow(8, d);
-
     std::cout << "WT building started\n";
 #define CACHE_WT
 #ifndef CACHE_WT
+    ReverseBWTDnaSeqAccessor rev_num_dna_data{dna_data, suff_arr};
+    const std::size_t rev_num_alph_size = std::pow(8, d);
+
     auto wt_file = WaveletTreeOnDisk::Build("wt_tree.20MB", rev_num_dna_data, rev_num_alph_size);
 #else
     const auto& wt_file = WaveletTreeOnDisk{"wt_tree.20MB"};
@@ -429,35 +429,11 @@ void print_num_leaves_arr() {
     (print_num_leaves<ds>(), ...);
 }
 
-constexpr bool enable_cache = true;
-
-namespace little_lab {
-const std::string data_size_arr[] = {"1KB", "1MB", "20MB", "100MB", "200MB"};
-
 std::string GetDataPath(const std::string& size) {
     return "../../data/T_SA/dna." + size;
 }
 
-void BuildAllStruct() {
-    if constexpr (!enable_cache) {
-        std::vector<std::future<void>> pull;
-        for (const auto& data_size : data_size_arr) {
-            std::string data_path = GetDataPath(data_size);
-            MakeZeroTerminated(data_path);
-
-            auto build = [&]<u8... ds> {
-                (pull.emplace_back(std::async(BuildAllStructures<ds>, data_path)), ...);
-            };
-
-            build.template operator()<1, 2, 3, 4, 5, 6, 7, 8>();
-
-            for (auto& task : pull) {
-                task.get();
-            }
-            pull.clear();
-        }
-    }
-}
+namespace lab {
 
 auto now() {
     return std::chrono::high_resolution_clock::now();
@@ -497,8 +473,8 @@ std::string DnaSeq2String(const DnaDataAccessor& dna, str_pos_t begin, str_pos_t
 }
 
 template <u8 block_size>
-void little_lab(unsigned num_queries, unsigned data_size_index, str_len_t pattern_len) {
-    auto uncompr_data_path = GetDataPath(data_size_arr[data_size_index]);
+void start(unsigned num_queries, std::string data_size_suffix, str_len_t pattern_len) {
+    auto uncompr_data_path = GetDataPath(data_size_suffix);
     NameGenerator name_gen{uncompr_data_path, block_size};
 
     const auto data_path = name_gen.GetCompressedTextPath();
@@ -509,12 +485,11 @@ void little_lab(unsigned num_queries, unsigned data_size_index, str_len_t patter
     DnaDataAccessor dna_data{dna_file_holder};
 
     num_queries = (unsigned)dna_data.Size() / 35'000;
+    std::cout << "pattern_len: " << pattern_len << std::endl;
     std::cout << "num_queries: " << num_queries << std::endl;
 
     const str_len_t seed = 0xEDA + 0xDED * 32;
     std::mt19937_64 gen{seed};
-
-    std::cout << "pattern_len: " << pattern_len << std::endl;
 
     std::vector<DnaBuffer> patterns;
     patterns.reserve(num_queries);
@@ -609,6 +584,15 @@ void little_lab(unsigned num_queries, unsigned data_size_index, str_len_t patter
                     unused_counter += sa_pos;
                     break;
                 }
+
+                const auto left_pattern_num = DnaSeq2Number(left_pattern);
+                auto [res_pos, is_rank_finded] =
+                    wt.GetFirstRank(left_pattern_num, 3 /* bits */ * k, sa_pos, sa_pos_right);
+
+                if (is_rank_finded) {
+                    unused_counter += sa_pos;
+                    break;
+                }
             }
 
             auto time_finish = now();
@@ -620,7 +604,7 @@ void little_lab(unsigned num_queries, unsigned data_size_index, str_len_t patter
         volatile auto t = 3;
     }
 
-    const auto num_sections = 5;
+    const auto num_sections = 5 * 0 + 1;
     const auto step = num_queries / num_sections;
     for (unsigned j = 0; j < num_sections; ++j) {
         std::vector<std::size_t> deltas((j + 1) * step);
@@ -634,54 +618,158 @@ void little_lab(unsigned num_queries, unsigned data_size_index, str_len_t patter
     }
 }
 
-}  // namespace little_lab
+}  // namespace lab
 
-// #define BLK_SIZE
+template <u8 block_size>
+void Exec(auto& lambda) {
+    lambda.template operator()<block_size>();
+}
 
-int main(int argc, char* argv[]) try {
+namespace little_lab {
+
+constexpr bool enable_cache = true;
+
+const std::string data_size_arr[] = {"1MB", "20MB", "100MB", "200MB"};
+
+void BuildAllStruct() {
+    std::vector<std::future<void>> pull;
+    for (const auto& data_size : data_size_arr) {
+        std::string data_path = GetDataPath(data_size);
+        MakeZeroTerminated(data_path);
+
+        auto build = [&]<u8... ds> {
+            (pull.emplace_back(std::async(BuildAllStructures<ds>, data_path)), ...);
+        };
+
+        build.template operator()<1, 2, 3, 4, 5, 6, 7, 8>();
+
+        for (auto& task : pull) {
+            task.get();
+        }
+        pull.clear();
+    }
+}
+
+void main(int argc, char* argv[]) {
+    if constexpr (!enable_cache) {
+        BuildAllStruct();
+        std::cout << "All structures builded" << std::endl;
+        return;
+    }
+
+    if (argc != 3) {
+        throw std::invalid_argument{"Enter block size and data size index"};
+    }
+
     int block_size_input = atoi(argv[1]);
     unsigned num_queries = 0;
     unsigned data_size_index = atoi(argv[2]);
-    str_len_t pattern_len = 320;
+    str_len_t pattern_len = 64;
+
+    std::string data_size_suffix = data_size_arr[data_size_index];
+
+    auto lab_start = [&]<u8 block_size> {
+        lab::start<block_size>(num_queries, data_size_suffix, pattern_len);
+    };
 
     switch (block_size_input) {
         case 1: {
-            little_lab::little_lab<1>(num_queries, data_size_index, pattern_len);
+            Exec<1>(lab_start);
         } break;
         case 2: {
-            little_lab::little_lab<2>(num_queries, data_size_index, pattern_len);
+            Exec<2>(lab_start);
         } break;
         case 3: {
-            little_lab::little_lab<3>(num_queries, data_size_index, pattern_len);
+            Exec<3>(lab_start);
         } break;
         case 4: {
-            little_lab::little_lab<4>(num_queries, data_size_index, pattern_len);
+            Exec<4>(lab_start);
         } break;
         case 5: {
-            little_lab::little_lab<5>(num_queries, data_size_index, pattern_len);
+            Exec<5>(lab_start);
         } break;
         case 6: {
-            little_lab::little_lab<6>(num_queries, data_size_index, pattern_len);
+            Exec<6>(lab_start);
         } break;
         case 7: {
-            little_lab::little_lab<7>(num_queries, data_size_index, pattern_len);
+            Exec<7>(lab_start);
         } break;
         case 8: {
-            little_lab::little_lab<8>(num_queries, data_size_index, pattern_len);
+            Exec<8>(lab_start);
         } break;
         default: {
             throw std::runtime_error{"Incorrect block size"};
         }
     }
+}
 
-    // constexpr u8 d = 2;
+}  // namespace little_lab
 
-    // if constexpr (d == 1) {
-    //     return main_blocking_1();
-    // } else {
-    //     return main_blocking_d<d>();
-    // }
+namespace big_lab {
 
-} catch (std::exception& exc) {
+constexpr bool build_struct = false;
+
+const std::string data_size_arr[] = {"500MB" /*"1GB", "4GB"*/};
+
+void BuildAllStruct() {
+    std::vector<std::future<void>> pull;
+    for (const auto& data_size : data_size_arr) {
+        std::string data_path = GetDataPath(data_size);
+        MakeZeroTerminated(data_path);
+
+        auto build = [&]<u8... ds> {
+            (pull.emplace_back(std::async(BuildAllStructures<ds>, data_path)), ...);
+        };
+
+        build.template operator()<1>();
+
+        for (auto& task : pull) {
+            task.get();
+        }
+        pull.clear();
+    }
+}
+
+void main(int argc, char* argv[]) {
+    if constexpr (build_struct) {
+        BuildAllStruct();
+        return;
+    }
+
+    if (argc != 3) {
+        throw std::invalid_argument{"Enter block size and data size index"};
+    }
+
+    int block_size_input = atoi(argv[1]);
+    unsigned num_queries = 0;
+    unsigned data_size_index = atoi(argv[2]);
+    str_len_t pattern_len = 16;
+
+    std::string data_size_suffix = data_size_arr[data_size_index];
+    auto lab_start = [&]<u8 block_size> {
+        lab::start<block_size>(num_queries, data_size_suffix, pattern_len);
+    };
+
+    switch (block_size_input) {
+        case 1: {
+            Exec<1>(lab_start);
+        } break;
+        case 5: {
+            Exec<5>(lab_start);
+        } break;
+        case 7: {
+            Exec<7>(lab_start);
+        } break;
+        default: {
+            throw std::runtime_error{"Incorrect block size"};
+        }
+    }
+}
+
+}  // namespace big_lab
+
+// #define BLK_SIZE
+
+int main(int argc, char* argv[]) try { little_lab::main(argc, argv); } catch (std::exception& exc) {
     std::cerr << "Exception: " << exc.what() << std::endl;
 }

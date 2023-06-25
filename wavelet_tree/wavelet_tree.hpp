@@ -132,6 +132,11 @@ public:
 
         size_t occup_size = select_table_pos_begin + sizeof(size_t) * size;
 
+        std::cout << "num lvl: " << num_levels << ", "
+                  << "bitvectors: " << (select_alph_pos_begin - bv_pos_begin) / 1000'000 << ", "
+                  << "alph pos: " << (select_table_pos_begin - select_alph_pos_begin)  / 1000'000 << ", "
+                  << "occ size: " << occup_size / 1000'000 << std::endl;
+
         return {std::move(symb_freq),  std::move(bv_sizes),    bv_pos_begin,
                 select_alph_pos_begin, select_table_pos_begin, occup_size};
     }

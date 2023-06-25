@@ -64,13 +64,13 @@ void BuildAllStructures(std::string dna_path) {
 
     // 1) Compr
     const auto& dna_compr_path = name_gen.GetCompressedTextPath();
-    std::cout << "Build compressed dna text -> " << dna_compr_path << std::endl;
-    BuildCompressedDnaFromTextDna(dna_path, dna_compr_path, block_size);
+    // std::cout << "Build compressed dna text -> " << dna_compr_path << std::endl;
+    // BuildCompressedDnaFromTextDna(dna_path, dna_compr_path, block_size);
 
     // 2) SA
     const auto& suff_arr_path = name_gen.GetSuffixArrayPath();
-    std::cout << "Build suffix array -> " << suff_arr_path << std::endl;
-    BuildSuffArrayFromComprDna(dna_compr_path, suff_arr_path, block_size);
+    // std::cout << "Build suffix array -> " << suff_arr_path << std::endl;
+    // BuildSuffArrayFromComprDna(dna_compr_path, suff_arr_path, block_size);
 
     const auto& sbt_path = name_gen.GetStringBTreePath();
     if constexpr (block_size == 1) {
@@ -78,8 +78,8 @@ void BuildAllStructures(std::string dna_path) {
         ObjectFileHolder dna_file_holder{dna_compr_path};
         DnaDataAccessor dna{dna_file_holder};
 
-        std::cout << "Build string b-tree -> " << sbt_path << std::endl;
-        SbtT::Build(sbt_path, dna, suff_arr_path);
+        // std::cout << "Build string b-tree -> " << sbt_path << std::endl;
+        // SbtT::Build(sbt_path, dna, suff_arr_path);
     } else {
         using SbtT = DNA_SBT::StringBTree<DnaSymbSeq<block_size>>;
 
@@ -91,8 +91,8 @@ void BuildAllStructures(std::string dna_path) {
                                      " != " + std::to_string(dna.Size())};
         }
 
-        std::cout << "Build string b-tree -> " << sbt_path << std::endl;
-        SbtT::Build(sbt_path, dna, suff_arr_path);
+        // std::cout << "Build string b-tree -> " << sbt_path << std::endl;
+        // SbtT::Build(sbt_path, dna, suff_arr_path);
 
         ObjectFileHolder suff_arr_holder{suff_arr_path};
         const str_pos_t* suff_arr = (const str_pos_t*)suff_arr_holder.cbegin();
@@ -101,7 +101,7 @@ void BuildAllStructures(std::string dna_path) {
         const std::size_t rev_num_alph_size = std::pow(8, block_size);
 
         const auto& wt_path = name_gen.GetWaveletTreePath();
-        std::cout << "Build wavelet tree -> " << wt_path << std::endl;
+        // std::cout << "Build wavelet tree -> " << wt_path << std::endl;
         WaveletTreeOnDisk::Build(wt_path, rev_num_dna, rev_num_alph_size);
     }
     std::cout << std::endl;
@@ -627,7 +627,7 @@ void Exec(auto& lambda) {
 
 namespace little_lab {
 
-constexpr bool enable_cache = true;
+constexpr bool enable_cache = false;
 
 const std::string data_size_arr[] = {"1MB", "20MB", "100MB", "200MB"};
 
@@ -635,7 +635,7 @@ void BuildAllStruct() {
     std::vector<std::future<void>> pull;
     for (const auto& data_size : data_size_arr) {
         std::string data_path = GetDataPath(data_size);
-        MakeZeroTerminated(data_path);
+        // MakeZeroTerminated(data_path);
 
         auto build = [&]<u8... ds> {
             (pull.emplace_back(std::async(BuildAllStructures<ds>, data_path)), ...);

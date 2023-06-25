@@ -27,8 +27,9 @@ WaveletTreeOnDisk WaveletTreeOnDisk::Build(std::string wt_path, const NumberAcce
                                            WaveletTree::size_t alph_size) {
     {
         auto build_info = WaveletTree::PrepareBuild(text, alph_size);
-        FileMapperWrite file{wt_path, build_info.CalcOccupiedSize()};
-        new (file.begin()) WaveletTree{text, alph_size, build_info};
+        
+        // FileMapperWrite file{wt_path, build_info.CalcOccupiedSize()};
+        // new (file.begin()) WaveletTree{text, alph_size, build_info};
     }
 
     return {wt_path};
